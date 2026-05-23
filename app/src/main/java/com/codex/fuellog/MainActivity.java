@@ -1052,7 +1052,7 @@ public class MainActivity extends Activity {
         e.setText(value == null ? "" : value);
         e.setSingleLine(false);
         e.setTextColor(ink);
-        e.setHintTextColor(Color.rgb(117, 112, 101));
+        e.setHintTextColor(Color.rgb(168, 176, 170));
         e.setTextSize(15);
         e.setMinHeight(dp(46));
         e.setPadding(dp(12), 0, dp(12), 0);
