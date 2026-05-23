@@ -47,6 +47,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.io.OutputStream;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -67,9 +68,12 @@ public class MainActivity extends Activity {
     private Spinner carSpinner;
     private TextView screenTitle;
     private TextView screenSubtitle;
+    private String pendingExportType;
+    private String pendingExportContent;
     private final List<Car> cars = new ArrayList<>();
     private long currentCarId = -1;
     private int selectedTab = 0;
+    private static final int REQ_EXPORT_FILE = 41;
     private final String[] tabTitles = {"首页", "记录", "图表", "费用", "设置"};
     private int accent = Color.rgb(31, 117, 107);
     private int accentDark = Color.rgb(18, 83, 78);
@@ -157,10 +161,27 @@ public class MainActivity extends Activity {
         bottomNav = new LinearLayout(this);
         bottomNav.setOrientation(LinearLayout.HORIZONTAL);
         bottomNav.setGravity(Gravity.CENTER);
-        bottomNav.setPadding(dp(8), dp(7), dp(8), dp(8));
-        bottomNav.setBackgroundColor(surface);
-        root.addView(bottomNav, new LinearLayout.LayoutParams(-1, dp(68)));
+        bottomNav.setPadding(dp(8), dp(8), dp(8), dp(10));
+        bottomNav.setBackground(round(surface, dp(18), 0));
+        LinearLayout.LayoutParams navLp = new LinearLayout.LayoutParams(-1, dp(78));
+        navLp.setMargins(dp(12), 0, dp(12), dp(12));
+        root.addView(bottomNav, navLp);
         buildBottomNav();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_EXPORT_FILE && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                out.write(pendingExportContent.getBytes("UTF-8"));
+                toast("已保存导出文件");
+            } catch (Exception e) {
+                toast("保存失败：" + e.getMessage());
+            }
+        }
+        pendingExportType = null;
+        pendingExportContent = null;
     }
 
     private void renderCurrentTab() {
@@ -271,6 +292,27 @@ public class MainActivity extends Activity {
         rootAdd(scroll);
     }
 
+    private void addRecordActions(LinearLayout box) {
+        LinearLayout panel = card();
+        panel.addView(label("快速记录", 18, true));
+        TextView hint = label("加油是主线，保养和其他费用用于计算真实用车成本。", 13, false);
+        hint.setTextColor(muted);
+        hint.setPadding(0, dp(2), 0, dp(10));
+        panel.addView(hint);
+        LinearLayout actions = row();
+        Button fuel = primaryButton("+ 加油");
+        fuel.setOnClickListener(v -> showFuelDialog(null));
+        Button maintenance = quietButton("保养");
+        maintenance.setOnClickListener(v -> showMaintenanceDialog(null));
+        Button expense = quietButton("费用");
+        expense.setOnClickListener(v -> showExpenseDialog(null));
+        actions.addView(fuel, new LinearLayout.LayoutParams(0, dp(48), 1.25f));
+        actions.addView(maintenance, new LinearLayout.LayoutParams(0, dp(48), 1));
+        actions.addView(expense, new LinearLayout.LayoutParams(0, dp(48), 1));
+        panel.addView(actions);
+        box.addView(panel);
+    }
+
     private void showAdd() {
         showFuelDialog(null);
     }
@@ -282,6 +324,7 @@ public class MainActivity extends Activity {
         ScrollView scroll = scroll();
         LinearLayout box = column();
         scroll.addView(box);
+        addRecordActions(box);
         box.addView(sectionTitle("加油记录"));
         List<Fuel> fuels = db.fuels(currentCarId, 0);
         if (fuels.isEmpty()) box.addView(empty("暂无加油记录"));
@@ -304,6 +347,7 @@ public class MainActivity extends Activity {
         ScrollView scroll = scroll();
         LinearLayout box = column();
         scroll.addView(box);
+        box.addView(chartHero());
         box.addView(sectionTitle("数据可视化"));
         List<FuelPoint> points = db.fuelPoints(currentCarId);
         box.addView(chartCard("油耗趋势 L/100km", new ChartView(this, points, ChartView.MODE_CONSUMPTION)));
@@ -322,6 +366,7 @@ public class MainActivity extends Activity {
         LinearLayout box = column();
         scroll.addView(box);
         Stats s = db.stats(currentCarId);
+        box.addView(costHero(s));
         box.addView(sectionTitle("费用分析"));
         LinearLayout row1 = row();
         row1.addView(metric("加油", "¥" + two.format(s.fuelCost), 1));
@@ -344,23 +389,27 @@ public class MainActivity extends Activity {
         ScrollView scroll = scroll();
         LinearLayout box = column();
         scroll.addView(box);
-        box.addView(sectionTitle("设置与数据"));
+        box.addView(settingsHero());
+        box.addView(sectionTitle("常用设置"));
         Button carsButton = primaryButton("管理车辆");
         carsButton.setOnClickListener(v -> showCarManager());
-        Button exportJson = quietButton("导出 JSON 备份");
-        exportJson.setOnClickListener(v -> exportJson());
-        Button exportCsv = quietButton("导出 CSV 表格");
-        exportCsv.setOnClickListener(v -> exportCsv());
         Button reminder = quietButton("创建本地提醒");
         reminder.setOnClickListener(v -> showReminderDialog());
-        Button clear = quietButton("清空当前车辆数据");
+        box.addView(settingRow("车辆资料", "维护车辆名称、油品、初始里程和油箱容量", carsButton));
+        box.addView(settingRow("本地提醒", "保养、保险或年检日期提醒", reminder));
+
+        box.addView(sectionTitle("数据备份"));
+        Button exportJson = quietButton("选择位置保存 JSON");
+        exportJson.setOnClickListener(v -> exportJson());
+        Button exportCsv = quietButton("选择位置保存 CSV");
+        exportCsv.setOnClickListener(v -> exportCsv());
+        box.addView(settingRow("完整备份", "包含车辆、加油、保养、费用和提醒", exportJson));
+        box.addView(settingRow("表格导出", "当前车辆加油记录，可用 Excel 查看", exportCsv));
+
+        box.addView(sectionTitle("危险操作"));
+        Button clear = dangerButton("清空当前车辆数据");
         clear.setOnClickListener(v -> confirmClear());
-        box.addView(carsButton, new LinearLayout.LayoutParams(-1, dp(52)));
-        box.addView(exportJson, new LinearLayout.LayoutParams(-1, dp(52)));
-        box.addView(exportCsv, new LinearLayout.LayoutParams(-1, dp(52)));
-        box.addView(reminder, new LinearLayout.LayoutParams(-1, dp(52)));
-        box.addView(clear, new LinearLayout.LayoutParams(-1, dp(52)));
-        box.addView(help("数据保存在手机本地 SQLite 中。导出的 JSON 可作为完整备份，CSV 可直接用表格软件查看。"));
+        box.addView(dangerPanel("只删除当前车辆的加油、保养、费用和提醒，车辆资料保留。", clear));
         rootAdd(scroll);
     }
 
@@ -629,11 +678,7 @@ public class MainActivity extends Activity {
 
     private void exportJson() {
         try {
-            File file = exportFile("fuel-log-backup.json");
-            FileWriter writer = new FileWriter(file);
-            writer.write(db.exportJson().toString(2));
-            writer.close();
-            share(file, "application/json");
+            chooseExportFile("fuel-log-backup.json", "application/json", db.exportJson().toString(2));
         } catch (Exception e) {
             toast("导出失败：" + e.getMessage());
         }
@@ -641,14 +686,20 @@ public class MainActivity extends Activity {
 
     private void exportCsv() {
         try {
-            File file = exportFile("fuel-records.csv");
-            FileWriter writer = new FileWriter(file);
-            writer.write(db.exportFuelCsv(currentCarId));
-            writer.close();
-            share(file, "text/csv");
+            chooseExportFile("fuel-records.csv", "text/csv", db.exportFuelCsv(currentCarId));
         } catch (Exception e) {
             toast("导出失败：" + e.getMessage());
         }
+    }
+
+    private void chooseExportFile(String fileName, String mimeType, String content) {
+        pendingExportType = mimeType;
+        pendingExportContent = content;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(mimeType);
+        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+        startActivityForResult(intent, REQ_EXPORT_FILE);
     }
 
     private File exportFile(String name) {
@@ -763,7 +814,7 @@ public class MainActivity extends Activity {
         b.setTextColor(Color.WHITE);
         b.setTextSize(14);
         b.setAllCaps(false);
-        b.setBackgroundColor(accentDark);
+        b.setBackground(round(accentDark, dp(14), 0));
         b.setPadding(dp(10), 0, dp(10), 0);
         return b;
     }
@@ -774,7 +825,18 @@ public class MainActivity extends Activity {
         b.setTextColor(accentDark);
         b.setTextSize(14);
         b.setAllCaps(false);
-        b.setBackgroundColor(Color.rgb(229, 239, 235));
+        b.setBackground(round(Color.rgb(229, 239, 235), dp(14), Color.rgb(201, 222, 215)));
+        b.setPadding(dp(8), 0, dp(8), 0);
+        return b;
+    }
+
+    private Button dangerButton(String text) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setTextColor(Color.rgb(139, 45, 36));
+        b.setTextSize(14);
+        b.setAllCaps(false);
+        b.setBackground(round(Color.rgb(255, 238, 234), dp(14), Color.rgb(236, 182, 171)));
         b.setPadding(dp(8), 0, dp(8), 0);
         return b;
     }
@@ -785,20 +847,24 @@ public class MainActivity extends Activity {
         b.setTextSize(13);
         b.setAllCaps(false);
         b.setTextColor(active ? Color.WHITE : muted);
-        b.setBackgroundColor(active ? accentDark : surface);
+        b.setBackground(active ? round(accentDark, dp(14), 0) : round(surface, dp(14), Color.rgb(232, 235, 229)));
         b.setPadding(dp(2), 0, dp(2), 0);
         return b;
+    }
+
+    private android.graphics.drawable.GradientDrawable round(int color, int radius, int strokeColor) {
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(color);
+        bg.setCornerRadius(radius);
+        if (strokeColor != 0) bg.setStroke(1, strokeColor);
+        return bg;
     }
 
     private LinearLayout card() {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
         l.setPadding(dp(14), dp(12), dp(14), dp(12));
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(Color.WHITE);
-        bg.setCornerRadius(dp(8));
-        bg.setStroke(1, Color.rgb(224, 218, 204));
-        l.setBackground(bg);
+        l.setBackground(round(Color.WHITE, dp(8), Color.rgb(224, 228, 222)));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.setMargins(0, 0, 0, dp(10));
         l.setLayoutParams(lp);
@@ -828,6 +894,93 @@ public class MainActivity extends Activity {
         meta.setTextColor(Color.rgb(225, 241, 236));
         h.addView(meta);
         return h;
+    }
+
+    private View chartHero() {
+        LinearLayout h = new LinearLayout(this);
+        h.setOrientation(LinearLayout.VERTICAL);
+        h.setPadding(dp(16), dp(14), dp(16), dp(14));
+        h.setBackground(round(Color.rgb(31, 117, 107), dp(8), 0));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(6), 0, dp(12));
+        h.setLayoutParams(lp);
+        TextView title = label("趋势会比单次数字更诚实", 19, true);
+        title.setTextColor(Color.WHITE);
+        TextView sub = label("油耗、油价、月度费用和加油站占比会随着记录自动更新。", 13, false);
+        sub.setTextColor(Color.rgb(225, 241, 236));
+        sub.setPadding(0, dp(5), 0, 0);
+        h.addView(title);
+        h.addView(sub);
+        return h;
+    }
+
+    private View costHero(Stats s) {
+        LinearLayout h = new LinearLayout(this);
+        h.setOrientation(LinearLayout.VERTICAL);
+        h.setPadding(dp(18), dp(16), dp(18), dp(16));
+        h.setBackground(round(Color.rgb(47, 84, 130), dp(8), 0));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(6), 0, dp(12));
+        h.setLayoutParams(lp);
+        TextView title = label("真实用车成本", 14, false);
+        title.setTextColor(Color.rgb(221, 233, 247));
+        TextView amount = label("¥" + two.format(s.totalCost), 30, true);
+        amount.setTextColor(Color.WHITE);
+        TextView sub = label(s.realCostPerKm > 0 ? "平均 ¥" + two.format(s.realCostPerKm) + "/km" : "记录加油和费用后自动计算每公里成本", 14, false);
+        sub.setTextColor(Color.rgb(221, 233, 247));
+        h.addView(title);
+        h.addView(amount);
+        h.addView(sub);
+        return h;
+    }
+
+    private View settingsHero() {
+        LinearLayout h = new LinearLayout(this);
+        h.setOrientation(LinearLayout.VERTICAL);
+        h.setPadding(dp(16), dp(14), dp(16), dp(14));
+        h.setBackground(round(Color.rgb(91, 93, 86), dp(8), 0));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, dp(6), 0, dp(12));
+        h.setLayoutParams(lp);
+        TextView title = label("数据在本机，备份由你掌控", 19, true);
+        title.setTextColor(Color.WHITE);
+        TextView sub = label("导出时可选择保存位置，适合放到下载、网盘或文件管理器。", 13, false);
+        sub.setTextColor(Color.rgb(236, 237, 232));
+        sub.setPadding(0, dp(5), 0, 0);
+        h.addView(title);
+        h.addView(sub);
+        return h;
+    }
+
+    private View settingRow(String title, String desc, Button action) {
+        LinearLayout c = card();
+        LinearLayout line = row();
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        TextView t = label(title, 17, true);
+        TextView d = label(desc, 13, false);
+        d.setTextColor(muted);
+        d.setPadding(0, dp(3), dp(8), 0);
+        copy.addView(t);
+        copy.addView(d);
+        line.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
+        line.addView(action, new LinearLayout.LayoutParams(dp(138), dp(46)));
+        c.addView(line);
+        return c;
+    }
+
+    private View dangerPanel(String desc, Button action) {
+        LinearLayout c = card();
+        c.setBackground(round(Color.rgb(255, 248, 246), dp(8), Color.rgb(236, 182, 171)));
+        TextView t = label("清空数据", 17, true);
+        t.setTextColor(Color.rgb(139, 45, 36));
+        TextView d = label(desc, 13, false);
+        d.setTextColor(Color.rgb(139, 76, 68));
+        d.setPadding(0, dp(4), 0, dp(12));
+        c.addView(t);
+        c.addView(d);
+        c.addView(action, new LinearLayout.LayoutParams(-1, dp(48)));
+        return c;
     }
 
     private View metric(String title, String value, int weight) {
