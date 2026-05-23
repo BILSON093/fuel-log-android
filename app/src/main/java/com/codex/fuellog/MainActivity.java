@@ -23,6 +23,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.StrictMode;
+import android.text.InputFilter;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -118,7 +119,7 @@ public class MainActivity extends Activity {
         titles.addView(screenTitle);
         titles.addView(screenSubtitle);
         titleBar.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
-        Button addFuel = primaryButton("+ 加油");
+        Button addFuel = primaryButton("+ 记录");
         addFuel.setOnClickListener(v -> showFuelDialog(null));
         titleBar.addView(addFuel, new LinearLayout.LayoutParams(dp(104), dp(44)));
         top.addView(titleBar);
@@ -128,7 +129,7 @@ public class MainActivity extends Activity {
         carCard.setGravity(Gravity.CENTER_VERTICAL);
         carCard.setPadding(dp(12), dp(10), dp(12), dp(10));
         carCard.setBackground(round(Color.rgb(243, 249, 246), dp(14), Color.rgb(211, 226, 220)));
-        LinearLayout.LayoutParams carLp = new LinearLayout.LayoutParams(-1, dp(68));
+        LinearLayout.LayoutParams carLp = new LinearLayout.LayoutParams(-1, -2);
         carLp.setMargins(0, dp(12), 0, 0);
         top.addView(carCard, carLp);
         TextView icon = label("CAR", 12, true);
@@ -142,6 +143,7 @@ public class MainActivity extends Activity {
         carNameView = label("当前车辆", 17, true);
         carMetaView = label("点击切换或管理车辆", 13, false);
         carMetaView.setTextColor(muted);
+        carMetaView.setSingleLine(false);
         carCopy.addView(carNameView);
         carCopy.addView(carMetaView);
         carCard.addView(carCopy, new LinearLayout.LayoutParams(0, -2, 1));
@@ -236,9 +238,38 @@ public class MainActivity extends Activity {
         Car c = currentCar();
         if (carNameView != null) carNameView.setText(c.name);
         if (carMetaView != null) {
-            String meta = (c.plate.isEmpty() ? "未填写车牌" : c.plate) + " · " + c.fuelType + " · " + c.defaultFuel + " · 油箱 " + one.format(c.tankLiters) + "L";
+            String capacity = isElectric(c) ? "电池 " + one.format(c.tankLiters) + "kWh" : "油箱 " + one.format(c.tankLiters) + "L";
+            String meta = (c.plate.isEmpty() ? "未填写车牌" : c.plate) + " · " + c.fuelType + " · " + c.defaultFuel + "\n" + capacity;
             carMetaView.setText(meta);
         }
+    }
+
+    private boolean isElectric(Car c) {
+        return c != null && ((c.fuelType != null && c.fuelType.contains("电")) || (c.defaultFuel != null && c.defaultFuel.contains("充")));
+    }
+
+    private String energyAction() {
+        return isElectric(currentCar()) ? "+ 充电" : "+ 加油";
+    }
+
+    private String consumptionName() {
+        return isElectric(currentCar()) ? "电耗" : "油耗";
+    }
+
+    private String consumptionUnit() {
+        return isElectric(currentCar()) ? "kWh/100km" : "L/100km";
+    }
+
+    private String amountUnit() {
+        return isElectric(currentCar()) ? "kWh" : "L";
+    }
+
+    private String priceUnit() {
+        return isElectric(currentCar()) ? "元/kWh" : "元/L";
+    }
+
+    private String stationName() {
+        return isElectric(currentCar()) ? "充电站" : "加油站";
     }
 
     private void showDashboard() {
@@ -251,7 +282,7 @@ public class MainActivity extends Activity {
         Stats s = db.stats(currentCarId);
         box.addView(hero(s));
         LinearLayout quick = row();
-        Button fuel = primaryButton("+ 加油");
+        Button fuel = primaryButton(energyAction());
         fuel.setOnClickListener(v -> showFuelDialog(null));
         Button upkeep = quietButton("记保养");
         upkeep.setOnClickListener(v -> showMaintenanceDialog(null));
@@ -266,11 +297,11 @@ public class MainActivity extends Activity {
         grid.setOrientation(LinearLayout.VERTICAL);
         box.addView(grid);
         LinearLayout row1 = row();
-        row1.addView(metric("平均油耗", s.avgConsumption > 0 ? two.format(s.avgConsumption) + " L/100km" : "暂无", 1));
-        row1.addView(metric("最近油耗", s.lastConsumption > 0 ? two.format(s.lastConsumption) + " L/100km" : "暂无", 1));
+        row1.addView(metric("平均" + consumptionName(), s.avgConsumption > 0 ? two.format(s.avgConsumption) + " " + consumptionUnit() : "暂无", 1));
+        row1.addView(metric("最近" + consumptionName(), s.lastConsumption > 0 ? two.format(s.lastConsumption) + " " + consumptionUnit() : "暂无", 1));
         grid.addView(row1);
         LinearLayout row2 = row();
-        row2.addView(metric("本月油费", "¥" + two.format(s.monthFuelCost), 1));
+        row2.addView(metric(isElectric(currentCar()) ? "本月电费" : "本月油费", "¥" + two.format(s.monthFuelCost), 1));
         row2.addView(metric("真实每公里", s.realCostPerKm > 0 ? "¥" + two.format(s.realCostPerKm) : "暂无", 1));
         grid.addView(row2);
         LinearLayout row3 = row();
@@ -279,16 +310,16 @@ public class MainActivity extends Activity {
         grid.addView(row3);
 
         if (s.avgConsumption > 0 && s.lastConsumption > s.avgConsumption * 1.25) {
-            box.addView(warn("最近一次油耗高于平均值 25% 以上，可检查胎压、路况或数据输入。"));
+            box.addView(warn("最近一次" + consumptionName() + "高于平均值 25% 以上，可检查胎压、路况或数据输入。"));
         }
         if (s.recentDaysWithoutFuel > 30) {
             box.addView(warn("超过 30 天没有加油记录，若最近加过油可以补记。"));
         }
 
-        box.addView(sectionTitle("最近加油"));
+        box.addView(sectionTitle(isElectric(currentCar()) ? "最近充电" : "最近加油"));
         List<Fuel> fuels = db.fuels(currentCarId, 3);
         if (fuels.isEmpty()) {
-            box.addView(empty("还没有加油记录。点“新增”开始记录第一次加满，之后就能计算油耗。"));
+            box.addView(empty(isElectric(currentCar()) ? "还没有充电记录。第一次充满作为基准，之后就能计算电耗。" : "还没有加油记录。第一次加满作为基准，之后就能计算油耗。"));
         } else {
             for (Fuel f : fuels) box.addView(fuelRow(f, false));
         }
@@ -298,12 +329,12 @@ public class MainActivity extends Activity {
     private void addRecordActions(LinearLayout box) {
         LinearLayout panel = card();
         panel.addView(label("快速记录", 18, true));
-        TextView hint = label("加油是主线，保养和其他费用用于计算真实用车成本。", 13, false);
+        TextView hint = label((isElectric(currentCar()) ? "充电" : "加油") + "是主线，保养和其他费用用于计算真实用车成本。", 13, false);
         hint.setTextColor(muted);
         hint.setPadding(0, dp(2), 0, dp(10));
         panel.addView(hint);
         LinearLayout actions = row();
-        Button fuel = primaryButton("+ 加油");
+        Button fuel = primaryButton(energyAction());
         fuel.setOnClickListener(v -> showFuelDialog(null));
         Button maintenance = quietButton("保养");
         maintenance.setOnClickListener(v -> showMaintenanceDialog(null));
@@ -328,9 +359,9 @@ public class MainActivity extends Activity {
         LinearLayout box = column();
         scroll.addView(box);
         addRecordActions(box);
-        box.addView(sectionTitle("加油记录"));
+        box.addView(sectionTitle(isElectric(currentCar()) ? "充电记录" : "加油记录"));
         List<Fuel> fuels = db.fuels(currentCarId, 0);
-        if (fuels.isEmpty()) box.addView(empty("暂无加油记录"));
+        if (fuels.isEmpty()) box.addView(empty(isElectric(currentCar()) ? "暂无充电记录" : "暂无加油记录"));
         for (Fuel f : fuels) box.addView(fuelRow(f, true));
         box.addView(sectionTitle("保养记录"));
         List<Entry> ms = db.entries("maintenance_records", currentCarId, 0);
@@ -353,11 +384,11 @@ public class MainActivity extends Activity {
         box.addView(chartHero());
         box.addView(sectionTitle("数据可视化"));
         List<FuelPoint> points = db.fuelPoints(currentCarId);
-        box.addView(chartCard("油耗趋势 L/100km", new ChartView(this, points, ChartView.MODE_CONSUMPTION)));
-        box.addView(chartCard("油价趋势 元/L", new ChartView(this, points, ChartView.MODE_PRICE)));
-        box.addView(chartCard("月度油费", new ChartView(this, db.monthPoints(currentCarId, "fuel"), ChartView.MODE_BAR)));
+        box.addView(chartCard(consumptionName() + "趋势 " + consumptionUnit(), new ChartView(this, points, ChartView.MODE_CONSUMPTION)));
+        box.addView(chartCard((isElectric(currentCar()) ? "电价趋势 " : "油价趋势 ") + priceUnit(), new ChartView(this, points, ChartView.MODE_PRICE)));
+        box.addView(chartCard(isElectric(currentCar()) ? "月度电费" : "月度油费", new ChartView(this, db.monthPoints(currentCarId, "fuel"), ChartView.MODE_BAR)));
         box.addView(chartCard("月度总用车成本", new ChartView(this, db.monthPoints(currentCarId, "all"), ChartView.MODE_BAR)));
-        box.addView(chartCard("加油站费用占比", new ChartView(this, db.stationPoints(currentCarId), ChartView.MODE_PIE)));
+        box.addView(chartCard(stationName() + "费用占比", new ChartView(this, db.stationPoints(currentCarId), ChartView.MODE_PIE)));
         rootAdd(scroll);
     }
 
@@ -372,7 +403,7 @@ public class MainActivity extends Activity {
         box.addView(costHero(s));
         box.addView(sectionTitle("费用分析"));
         LinearLayout row1 = row();
-        row1.addView(metric("加油", "¥" + two.format(s.fuelCost), 1));
+        row1.addView(metric(isElectric(currentCar()) ? "充电" : "加油", "¥" + two.format(s.fuelCost), 1));
         row1.addView(metric("保养", "¥" + two.format(s.maintenanceCost), 1));
         row1.addView(metric("其他", "¥" + two.format(s.expenseCost), 1));
         box.addView(row1);
@@ -417,6 +448,7 @@ public class MainActivity extends Activity {
     }
 
     private View fuelRow(Fuel f, boolean editable) {
+        boolean ev = isElectric(currentCar());
         LinearLayout card = card();
         LinearLayout top = row();
         LinearLayout left = new LinearLayout(this);
@@ -428,7 +460,7 @@ public class MainActivity extends Activity {
         left.addView(odo);
         top.addView(left, new LinearLayout.LayoutParams(0, -2, 1));
 
-        String status = f.full ? "加满" : "未加满";
+        String status = f.full ? (ev ? "充满" : "加满") : (ev ? "未充满" : "未加满");
         if (f.missed) status += " · 漏记";
         top.addView(tag(status, f.full ? accentDark : Color.rgb(183, 117, 43)));
         card.addView(top);
@@ -437,11 +469,11 @@ public class MainActivity extends Activity {
         focus.setPadding(0, dp(12), 0, dp(10));
         LinearLayout consumption = new LinearLayout(this);
         consumption.setOrientation(LinearLayout.VERTICAL);
-        TextView cLabel = label("本次油耗", 12, false);
+        TextView cLabel = label("本次" + consumptionName(), 12, false);
         cLabel.setTextColor(muted);
         TextView cValue = label(f.consumption > 0 ? two.format(f.consumption) : "--", 30, true);
         cValue.setTextColor(f.consumption > 0 ? accentDark : muted);
-        TextView cUnit = label(f.consumption > 0 ? "L/100km" : "待下次加满计算", 12, false);
+        TextView cUnit = label(f.consumption > 0 ? consumptionUnit() : (ev ? "待下次充满计算" : "待下次加满计算"), 12, false);
         cUnit.setTextColor(muted);
         consumption.addView(cLabel);
         consumption.addView(cValue);
@@ -453,7 +485,7 @@ public class MainActivity extends Activity {
         money.setGravity(Gravity.END);
         TextView amount = label("¥" + two.format(f.amount), 24, true);
         amount.setGravity(Gravity.END);
-        TextView liters = label(one.format(f.liters) + " L", 14, false);
+        TextView liters = label(one.format(f.liters) + " " + amountUnit(), 14, false);
         liters.setTextColor(muted);
         liters.setGravity(Gravity.END);
         money.addView(amount);
@@ -463,12 +495,12 @@ public class MainActivity extends Activity {
 
         LinearLayout chips = row();
         chips.addView(infoChip("区间", f.distance > 0 ? one.format(f.distance) + " km" : "--"));
-        chips.addView(infoChip("油价", f.price > 0 ? two.format(f.price) + " 元/L" : "--"));
-        chips.addView(infoChip("油品", f.fuelType.isEmpty() ? "--" : f.fuelType));
+        chips.addView(infoChip(ev ? "电价" : "油价", f.price > 0 ? two.format(f.price) + " " + priceUnit() : "--"));
+        chips.addView(infoChip(ev ? "充电类型" : "油品", f.fuelType.isEmpty() ? "--" : f.fuelType));
         card.addView(chips);
 
         if (!f.station.isEmpty() || !f.note.isEmpty()) {
-            TextView meta = label((f.station.isEmpty() ? "未填写加油站" : f.station) + (f.note.isEmpty() ? "" : " · " + f.note), 13, false);
+            TextView meta = label((f.station.isEmpty() ? "未填写" + stationName() : f.station) + (f.note.isEmpty() ? "" : " · " + f.note), 13, false);
             meta.setTextColor(muted);
             meta.setPadding(0, dp(10), 0, 0);
             card.addView(meta);
@@ -515,18 +547,20 @@ public class MainActivity extends Activity {
     }
 
     private void showFuelDialog(Fuel existing) {
+        boolean ev = isElectric(currentCar());
         LinearLayout form = dialogForm();
-        form.addView(formHero("记录这一次加油", "填两个价格相关数据，第三个会自动计算。"));
+        form.addView(formHero(ev ? "记录这一次充电" : "记录这一次加油", "填两个价格相关数据，第三个会自动计算。"));
         EditText date = input("请选择日期", existing == null ? today() : existing.date, false);
         EditText odo = input("例如 35680", existing == null ? "" : one.format(existing.odometer), true);
-        EditText liters = input("例如 42.5", existing == null ? "" : one.format(existing.liters), true);
-        EditText amount = input("例如 320", existing == null ? "" : two.format(existing.amount), true);
-        EditText price = input("例如 7.53", existing == null ? defaultFuelPrice() : two.format(existing.price), true);
-        EditText station = input("中石化 / 壳牌 / 其他", existing == null ? "" : existing.station, false);
-        EditText fuelType = input("92 / 95 / 98 / 柴油", existing == null ? currentCar().defaultFuel : existing.fuelType, false);
-        CheckBox full = check("本次加满", existing == null || existing.full);
-        CheckBox missed = check("漏记后补录/跳过本区间油耗", existing != null && existing.missed);
-        EditText note = input("路况、优惠、驾驶情况等", existing == null ? "" : existing.note, false);
+        EditText liters = input(ev ? "例如 38.5" : "例如 42.5", existing == null ? "" : one.format(existing.liters), true);
+        EditText amount = input(ev ? "例如 62" : "例如 320", existing == null ? "" : two.format(existing.amount), true);
+        EditText price = input(ev ? "例如 1.60" : "例如 7.53", existing == null ? defaultFuelPrice() : two.format(existing.price), true);
+        EditText station = input(ev ? "特来电 / 星星充电 / 家充" : "中石化 / 壳牌 / 其他", existing == null ? "" : existing.station, false);
+        EditText fuelType = input(ev ? "快充 / 慢充 / 家充" : "92 / 95 / 98 / 柴油", existing == null ? currentCar().defaultFuel : existing.fuelType, false);
+        fuelType.setOnClickListener(v -> chooseValue(fuelType, ev ? new String[]{"快充", "慢充", "家充", "公共充电", "免费充电"} : new String[]{"92", "95", "98", "柴油"}));
+        CheckBox full = check(ev ? "本次充满" : "本次加满", existing == null || existing.full);
+        CheckBox missed = check("漏记后补录/跳过本区间" + consumptionName(), existing != null && existing.missed);
+        EditText note = input(ev ? "充电速度、停车费、优惠等" : "路况、优惠、驾驶情况等", existing == null ? "" : existing.note, false);
         date.setOnClickListener(v -> pickDate(date));
 
         LinearLayout basic = formSection("基础信息");
@@ -534,19 +568,19 @@ public class MainActivity extends Activity {
         basic.addView(field("当前总里程 km", odo));
         form.addView(basic);
 
-        LinearLayout fuel = formSection("油量与金额");
-        fuel.addView(twoFields(field("加油量 L", liters), field("金额 元", amount)));
-        fuel.addView(twoFields(field("油价 元/L", price), field("油品", fuelType)));
+        LinearLayout fuel = formSection(ev ? "电量与金额" : "油量与金额");
+        fuel.addView(twoFields(field(ev ? "充电量 kWh" : "加油量 L", liters), field(ev ? "电费 元" : "金额 元", amount)));
+        fuel.addView(twoFields(field(ev ? "电价 元/kWh" : "油价 元/L", price), field(ev ? "充电类型" : "油品", fuelType)));
         fuel.addView(checkRow(full, missed));
         form.addView(fuel);
 
         LinearLayout extra = formSection("补充信息");
-        extra.addView(field("加油站", station));
+        extra.addView(field(stationName(), station));
         extra.addView(field("备注", note));
         form.addView(extra);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(existing == null ? "新增加油" : "编辑加油")
+                .setTitle(existing == null ? (ev ? "新增充电" : "新增加油") : (ev ? "编辑充电" : "编辑加油"))
                 .setView(form)
                 .setPositiveButton("保存", null)
                 .setNegativeButton("取消", null)
@@ -674,7 +708,7 @@ public class MainActivity extends Activity {
     private View carManagerRow(Car c) {
         LinearLayout card = card();
         LinearLayout top = row();
-        TextView avatar = label(c.defaultFuel.isEmpty() ? "车" : c.defaultFuel, 13, true);
+        TextView avatar = label(isElectric(c) ? "电" : (c.defaultFuel.isEmpty() ? "车" : c.defaultFuel), 13, true);
         avatar.setGravity(Gravity.CENTER);
         avatar.setTextColor(Color.WHITE);
         avatar.setBackground(round(c.id == currentCarId ? accentDark : Color.rgb(91, 93, 86), dp(12), 0));
@@ -684,7 +718,7 @@ public class MainActivity extends Activity {
         copy.setOrientation(LinearLayout.VERTICAL);
         copy.setPadding(dp(12), 0, dp(8), 0);
         TextView name = label(c.name + (c.id == currentCarId ? " · 当前" : ""), 17, true);
-        TextView meta = label((c.plate.isEmpty() ? "未填写车牌" : c.plate) + " · " + c.fuelType + " · 油箱 " + one.format(c.tankLiters) + "L", 13, false);
+        TextView meta = label((c.plate.isEmpty() ? "未填写车牌" : c.plate) + " · " + c.fuelType + " · " + (isElectric(c) ? "电池 " + one.format(c.tankLiters) + "kWh" : "油箱 " + one.format(c.tankLiters) + "L"), 13, false);
         meta.setTextColor(muted);
         copy.addView(name);
         copy.addView(meta);
@@ -709,17 +743,33 @@ public class MainActivity extends Activity {
         EditText name = input("例如 我的车", c == null ? "我的车" : c.name, false);
         EditText brand = input("品牌 / 型号", c == null ? "" : c.brand, false);
         EditText plate = input("车牌号", c == null ? "" : c.plate, false);
-        EditText fuelType = input("汽油 / 柴油 / 混动", c == null ? "汽油" : c.fuelType, false);
-        EditText defaultFuel = input("92 / 95 / 98", c == null ? "92" : c.defaultFuel, false);
+        plate.setFilters(new InputFilter[]{new InputFilter.AllCaps(), new InputFilter.LengthFilter(8)});
+        plate.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText fuelType = input("汽油 / 柴油 / 混动 / 电车", c == null ? "汽油" : c.fuelType, false);
+        EditText defaultFuel = input("92 / 95 / 98 / 快充", c == null ? "92" : c.defaultFuel, false);
         EditText initial = input("例如 0", c == null ? "0" : one.format(c.initialOdometer), true);
         EditText tank = input("例如 50", c == null ? "50" : one.format(c.tankLiters), true);
+        fuelType.setOnClickListener(v -> chooseValue(fuelType, new String[]{"汽油", "柴油", "混动", "电车"}, () -> {
+            if (fuelType.getText().toString().contains("电")) {
+                if (defaultFuel.getText().toString().matches("92|95|98|柴油")) defaultFuel.setText("快充");
+                if (num(tank) == 50) tank.setText("60");
+            } else {
+                if (defaultFuel.getText().toString().contains("充")) defaultFuel.setText("92");
+                if (num(tank) == 60) tank.setText("50");
+            }
+        }));
+        defaultFuel.setOnClickListener(v -> {
+            boolean ev = fuelType.getText().toString().contains("电");
+            chooseValue(defaultFuel, ev ? new String[]{"快充", "慢充", "家充", "公共充电"} : new String[]{"92", "95", "98", "柴油"});
+        });
         LinearLayout basic = formSection("车辆信息");
         basic.addView(field("车辆名称", name));
         basic.addView(twoFields(field("品牌/型号", brand), field("车牌号", plate)));
+        basic.addView(plateProvinceRow(plate));
         form.addView(basic);
-        LinearLayout fuel = formSection("燃油设置");
-        fuel.addView(twoFields(field("燃油类型", fuelType), field("默认油品", defaultFuel)));
-        fuel.addView(twoFields(field("初始里程 km", initial), field("油箱容量 L", tank)));
+        LinearLayout fuel = formSection("能源设置");
+        fuel.addView(twoFields(field("能源类型", fuelType), field("默认油品/充电", defaultFuel)));
+        fuel.addView(twoFields(field("初始里程 km", initial), field("油箱/电池容量", tank)));
         form.addView(fuel);
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(c == null ? "添加车辆" : "编辑车辆")
@@ -964,6 +1014,52 @@ public class MainActivity extends Activity {
         return line;
     }
 
+    private void chooseValue(EditText target, String[] values) {
+        chooseValue(target, values, null);
+    }
+
+    private void chooseValue(EditText target, String[] values, Runnable after) {
+        new AlertDialog.Builder(this)
+                .setTitle("请选择")
+                .setItems(values, (dialog, which) -> {
+                    target.setText(values[which]);
+                    if (after != null) after.run();
+                })
+                .show();
+    }
+
+    private View plateProvinceRow(EditText target) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        TextView title = label("车牌省份快捷输入", 12, true);
+        title.setTextColor(muted);
+        title.setPadding(dp(2), 0, 0, dp(5));
+        wrap.addView(title);
+        LinearLayout line = row();
+        String[] provinces = {"京", "沪", "粤", "浙", "苏", "川", "鲁"};
+        for (String p : provinces) {
+            TextView b = label(p, 13, true);
+            b.setGravity(Gravity.CENTER);
+            b.setTextColor(accentDark);
+            b.setBackground(round(Color.rgb(246, 250, 247), dp(10), Color.rgb(218, 228, 222)));
+            b.setOnClickListener(v -> {
+                String current = target.getText().toString().trim();
+                if (current.length() == 0 || current.substring(0, 1).matches("[\\u4e00-\\u9fa5]")) {
+                    target.setText(((TextView) v).getText().toString() + (current.length() > 1 ? current.substring(1) : ""));
+                    target.setSelection(target.getText().length());
+                }
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1);
+            lp.setMargins(dp(2), 0, dp(2), 0);
+            line.addView(b, lp);
+        }
+        wrap.addView(line);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, dp(10));
+        wrap.setLayoutParams(lp);
+        return wrap;
+    }
+
     private CheckBox check(String text, boolean checked) {
         CheckBox c = new CheckBox(this);
         c.setText(text);
@@ -1121,14 +1217,14 @@ public class MainActivity extends Activity {
         hp.setMargins(0, dp(6), 0, dp(12));
         h.setLayoutParams(hp);
 
-        TextView small = label("当前平均油耗", 13, false);
+        TextView small = label("当前平均" + consumptionName(), 13, false);
         small.setTextColor(Color.rgb(202, 229, 221));
         h.addView(small);
-        TextView big = label(s.avgConsumption > 0 ? two.format(s.avgConsumption) + " L/100km" : "等待第二次加满", 30, true);
+        TextView big = label(s.avgConsumption > 0 ? two.format(s.avgConsumption) + " " + consumptionUnit() : (isElectric(currentCar()) ? "等待第二次充满" : "等待第二次加满"), 30, true);
         big.setTextColor(Color.WHITE);
         big.setPadding(0, dp(4), 0, dp(6));
         h.addView(big);
-        TextView meta = label("本月油费 ¥" + two.format(s.monthFuelCost) + " · 总里程 " + one.format(s.totalDistance) + " km", 14, false);
+        TextView meta = label((isElectric(currentCar()) ? "本月电费 ¥" : "本月油费 ¥") + two.format(s.monthFuelCost) + " · 总里程 " + one.format(s.totalDistance) + " km", 14, false);
         meta.setTextColor(Color.rgb(225, 241, 236));
         h.addView(meta);
         return h;
@@ -1144,7 +1240,7 @@ public class MainActivity extends Activity {
         h.setLayoutParams(lp);
         TextView title = label("趋势会比单次数字更诚实", 19, true);
         title.setTextColor(Color.WHITE);
-        TextView sub = label("油耗、油价、月度费用和加油站占比会随着记录自动更新。", 13, false);
+        TextView sub = label(consumptionName() + "、" + (isElectric(currentCar()) ? "电价" : "油价") + "、月度费用和" + stationName() + "占比会随着记录自动更新。", 13, false);
         sub.setTextColor(Color.rgb(225, 241, 236));
         sub.setPadding(0, dp(5), 0, 0);
         h.addView(title);
