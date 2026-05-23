@@ -16,8 +16,8 @@ mkdir -p "$BUILD/res" "$BUILD/gen" "$BUILD/classes" "$BUILD/dex" "$ROOT/dist"
   --manifest "$ROOT/app/src/main/AndroidManifest.xml" \
   --min-sdk-version 26 \
   --target-sdk-version 35 \
-  --version-code 1 \
-  --version-name 1.0.0 \
+  --version-code 2 \
+  --version-name 1.0.1 \
   --java "$BUILD/gen" \
   "$BUILD/res/resources.zip"
 

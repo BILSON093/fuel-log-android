@@ -3,3 +3,8 @@ build/
 app/build/
 *.idsig
 debug.keystore
+release/keystore/
+tools/
+*.jks
+*.keystore
+*.idsig

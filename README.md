@@ -33,3 +33,31 @@ dist/车耗记.apk
 ```
 
 需要本机存在 Android SDK 35 build-tools 和 JDK 17。
+
+## 上架准备
+
+上架资料在 `release/` 目录：
+
+- `privacy-policy.html`：隐私政策
+- `store-listing.md`：应用市场文案
+- `compliance.md`：权限和数据合规说明
+- `release-checklist.md`：审核前检查清单
+- `assets/`：图标和宣传图
+
+构建正式签名 APK：
+
+```bash
+./build-release.sh
+```
+
+输出：
+
+```text
+dist/车耗记-release.apk
+```
+
+构建 Google Play AAB：
+
+```bash
+./build-release-aab.sh
+```
