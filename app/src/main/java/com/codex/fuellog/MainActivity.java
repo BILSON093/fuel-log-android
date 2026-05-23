@@ -513,19 +513,34 @@ public class MainActivity extends Activity {
 
     private void showFuelDialog(Fuel existing) {
         LinearLayout form = dialogForm();
-        EditText date = input("日期 yyyy-MM-dd", existing == null ? today() : existing.date, false);
-        EditText odo = input("当前总里程 km", existing == null ? "" : one.format(existing.odometer), true);
-        EditText liters = input("加油量 L", existing == null ? "" : one.format(existing.liters), true);
-        EditText amount = input("金额 元", existing == null ? "" : two.format(existing.amount), true);
-        EditText price = input("油价 元/L", existing == null ? defaultFuelPrice() : two.format(existing.price), true);
-        EditText station = input("加油站", existing == null ? "" : existing.station, false);
-        EditText fuelType = input("油品", existing == null ? currentCar().defaultFuel : existing.fuelType, false);
+        form.addView(formHero("记录这一次加油", "填两个价格相关数据，第三个会自动计算。"));
+        EditText date = input("请选择日期", existing == null ? today() : existing.date, false);
+        EditText odo = input("例如 35680", existing == null ? "" : one.format(existing.odometer), true);
+        EditText liters = input("例如 42.5", existing == null ? "" : one.format(existing.liters), true);
+        EditText amount = input("例如 320", existing == null ? "" : two.format(existing.amount), true);
+        EditText price = input("例如 7.53", existing == null ? defaultFuelPrice() : two.format(existing.price), true);
+        EditText station = input("中石化 / 壳牌 / 其他", existing == null ? "" : existing.station, false);
+        EditText fuelType = input("92 / 95 / 98 / 柴油", existing == null ? currentCar().defaultFuel : existing.fuelType, false);
         CheckBox full = check("本次加满", existing == null || existing.full);
         CheckBox missed = check("漏记后补录/跳过本区间油耗", existing != null && existing.missed);
-        EditText note = input("备注", existing == null ? "" : existing.note, false);
+        EditText note = input("路况、优惠、驾驶情况等", existing == null ? "" : existing.note, false);
         date.setOnClickListener(v -> pickDate(date));
-        form.addView(date); form.addView(odo); form.addView(liters); form.addView(amount); form.addView(price);
-        form.addView(station); form.addView(fuelType); form.addView(full); form.addView(missed); form.addView(note);
+
+        LinearLayout basic = formSection("基础信息");
+        basic.addView(field("日期", date));
+        basic.addView(field("当前总里程 km", odo));
+        form.addView(basic);
+
+        LinearLayout fuel = formSection("油量与金额");
+        fuel.addView(twoFields(field("加油量 L", liters), field("金额 元", amount)));
+        fuel.addView(twoFields(field("油价 元/L", price), field("油品", fuelType)));
+        fuel.addView(checkRow(full, missed));
+        form.addView(fuel);
+
+        LinearLayout extra = formSection("补充信息");
+        extra.addView(field("加油站", station));
+        extra.addView(field("备注", note));
+        form.addView(extra);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(existing == null ? "新增加油" : "编辑加油")
@@ -569,27 +584,45 @@ public class MainActivity extends Activity {
 
     private void showMaintenanceDialog(Entry existing) {
         LinearLayout form = dialogForm();
-        EditText date = input("日期 yyyy-MM-dd", existing == null ? today() : existing.date, false);
-        EditText odo = input("当前总里程 km", existing == null ? "" : one.format(existing.odometer), true);
-        EditText title = input("保养类型", existing == null ? "机油/机滤" : existing.title, false);
-        EditText amount = input("金额 元", existing == null ? "" : two.format(existing.amount), true);
-        EditText place = input("门店", existing == null ? "" : existing.place, false);
-        EditText note = input("备注", existing == null ? "" : existing.note, false);
+        form.addView(formHero("记录保养", "保养费用会计入真实每公里成本。"));
+        EditText date = input("请选择日期", existing == null ? today() : existing.date, false);
+        EditText odo = input("例如 35680", existing == null ? "" : one.format(existing.odometer), true);
+        EditText title = input("机油 / 机滤 / 轮胎 / 保险", existing == null ? "机油/机滤" : existing.title, false);
+        EditText amount = input("例如 480", existing == null ? "" : two.format(existing.amount), true);
+        EditText place = input("4S 店 / 修理厂 / 门店", existing == null ? "" : existing.place, false);
+        EditText note = input("配件品牌、下次保养里程等", existing == null ? "" : existing.note, false);
         date.setOnClickListener(v -> pickDate(date));
-        form.addView(date); form.addView(odo); form.addView(title); form.addView(amount); form.addView(place); form.addView(note);
+        LinearLayout basic = formSection("基础信息");
+        basic.addView(field("日期", date));
+        basic.addView(field("当前总里程 km", odo));
+        form.addView(basic);
+        LinearLayout detail = formSection("保养内容");
+        detail.addView(field("保养类型", title));
+        detail.addView(twoFields(field("金额 元", amount), field("门店", place)));
+        detail.addView(field("备注", note));
+        form.addView(detail);
         entryDialog(existing, "maintenance_records", "保养记录", form, date, odo, title, amount, place, note);
     }
 
     private void showExpenseDialog(Entry existing) {
         LinearLayout form = dialogForm();
-        EditText date = input("日期 yyyy-MM-dd", existing == null ? today() : existing.date, false);
-        EditText odo = input("当前总里程 km", existing == null ? "" : one.format(existing.odometer), true);
-        EditText title = input("费用类型", existing == null ? "停车费" : existing.title, false);
-        EditText amount = input("金额 元", existing == null ? "" : two.format(existing.amount), true);
-        EditText place = input("地点/商户", existing == null ? "" : existing.place, false);
+        form.addView(formHero("记录费用", "停车、过路、洗车等都会进入总用车成本。"));
+        EditText date = input("请选择日期", existing == null ? today() : existing.date, false);
+        EditText odo = input("例如 35680", existing == null ? "" : one.format(existing.odometer), true);
+        EditText title = input("停车费 / 过路费 / 洗车", existing == null ? "停车费" : existing.title, false);
+        EditText amount = input("例如 35", existing == null ? "" : two.format(existing.amount), true);
+        EditText place = input("地点或商户", existing == null ? "" : existing.place, false);
         EditText note = input("备注", existing == null ? "" : existing.note, false);
         date.setOnClickListener(v -> pickDate(date));
-        form.addView(date); form.addView(odo); form.addView(title); form.addView(amount); form.addView(place); form.addView(note);
+        LinearLayout basic = formSection("基础信息");
+        basic.addView(field("日期", date));
+        basic.addView(field("当前总里程 km", odo));
+        form.addView(basic);
+        LinearLayout detail = formSection("费用内容");
+        detail.addView(field("费用类型", title));
+        detail.addView(twoFields(field("金额 元", amount), field("地点/商户", place)));
+        detail.addView(field("备注", note));
+        form.addView(detail);
         entryDialog(existing, "expense_records", "费用记录", form, date, odo, title, amount, place, note);
     }
 
@@ -794,7 +827,7 @@ public class MainActivity extends Activity {
     private LinearLayout dialogForm() {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
-        int p = dp(10);
+        int p = dp(8);
         form.setPadding(p, p, p, p);
         return form;
     }
@@ -806,9 +839,86 @@ public class MainActivity extends Activity {
         e.setSingleLine(false);
         e.setTextColor(ink);
         e.setHintTextColor(Color.rgb(117, 112, 101));
-        e.setPadding(dp(8), dp(6), dp(8), dp(6));
+        e.setTextSize(15);
+        e.setMinHeight(dp(46));
+        e.setPadding(dp(12), 0, dp(12), 0);
+        e.setBackground(round(Color.rgb(249, 251, 248), dp(10), Color.rgb(218, 228, 222)));
         if (number) e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         return e;
+    }
+
+    private View formHero(String title, String subtitle) {
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setPadding(dp(14), dp(12), dp(14), dp(12));
+        hero.setBackground(round(accentDark, dp(8), 0));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, dp(10));
+        hero.setLayoutParams(lp);
+        TextView t = label(title, 18, true);
+        t.setTextColor(Color.WHITE);
+        TextView s = label(subtitle, 13, false);
+        s.setTextColor(Color.rgb(225, 241, 236));
+        s.setPadding(0, dp(4), 0, 0);
+        hero.addView(t);
+        hero.addView(s);
+        return hero;
+    }
+
+    private LinearLayout formSection(String title) {
+        LinearLayout section = new LinearLayout(this);
+        section.setOrientation(LinearLayout.VERTICAL);
+        section.setPadding(dp(12), dp(10), dp(12), dp(8));
+        section.setBackground(round(Color.WHITE, dp(8), Color.rgb(224, 228, 222)));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, dp(10));
+        section.setLayoutParams(lp);
+        TextView heading = label(title, 15, true);
+        heading.setPadding(0, 0, 0, dp(8));
+        section.addView(heading);
+        return section;
+    }
+
+    private View field(String title, EditText input) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        TextView t = label(title, 12, true);
+        t.setTextColor(muted);
+        t.setPadding(dp(2), 0, 0, dp(5));
+        wrap.addView(t);
+        wrap.addView(input, new LinearLayout.LayoutParams(-1, dp(48)));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, dp(10));
+        wrap.setLayoutParams(lp);
+        return wrap;
+    }
+
+    private View twoFields(View left, View right) {
+        LinearLayout line = row();
+        line.setGravity(Gravity.TOP);
+        LinearLayout.LayoutParams leftLp = new LinearLayout.LayoutParams(0, -2, 1);
+        leftLp.setMargins(0, 0, dp(5), 0);
+        LinearLayout.LayoutParams rightLp = new LinearLayout.LayoutParams(0, -2, 1);
+        rightLp.setMargins(dp(5), 0, 0, 0);
+        line.addView(left, leftLp);
+        line.addView(right, rightLp);
+        return line;
+    }
+
+    private View checkRow(CheckBox left, CheckBox right) {
+        LinearLayout line = row();
+        line.setPadding(dp(2), 0, dp(2), dp(2));
+        left.setBackground(round(Color.rgb(246, 250, 247), dp(10), Color.rgb(218, 228, 222)));
+        right.setBackground(round(Color.rgb(246, 250, 247), dp(10), Color.rgb(218, 228, 222)));
+        left.setPadding(dp(8), 0, dp(8), 0);
+        right.setPadding(dp(8), 0, dp(8), 0);
+        LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(0, dp(48), 1);
+        lp1.setMargins(0, 0, dp(5), 0);
+        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(0, dp(48), 1);
+        lp2.setMargins(dp(5), 0, 0, 0);
+        line.addView(left, lp1);
+        line.addView(right, lp2);
+        return line;
     }
 
     private CheckBox check(String text, boolean checked) {
