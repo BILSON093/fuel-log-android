@@ -9,7 +9,6 @@ import android.app.PendingIntent;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -27,18 +26,13 @@ import android.os.StrictMode;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.DatePicker;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -65,7 +59,9 @@ public class MainActivity extends Activity {
     private LinearLayout root;
     private LinearLayout content;
     private LinearLayout bottomNav;
-    private Spinner carSpinner;
+    private LinearLayout carCard;
+    private TextView carNameView;
+    private TextView carMetaView;
     private TextView screenTitle;
     private TextView screenSubtitle;
     private String pendingExportType;
@@ -127,32 +123,34 @@ public class MainActivity extends Activity {
         titleBar.addView(addFuel, new LinearLayout.LayoutParams(dp(104), dp(44)));
         top.addView(titleBar);
 
-        LinearLayout carLine = new LinearLayout(this);
-        carLine.setGravity(Gravity.CENTER_VERTICAL);
-        carLine.setPadding(0, dp(12), 0, 0);
-        TextView carLabel = label("当前车辆", 13, false);
-        carLabel.setTextColor(muted);
-        carLine.addView(carLabel, new LinearLayout.LayoutParams(dp(76), -2));
-        carSpinner = new Spinner(this);
-        carSpinner.setPadding(0, 0, 0, 0);
-        carSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (position >= 0 && position < cars.size()) {
-                    long next = cars.get(position).id;
-                    if (next != currentCarId) {
-                        currentCarId = next;
-                        saveDefaultCar(next);
-                        renderCurrentTab();
-                    }
-                }
-            }
-            @Override public void onNothingSelected(AdapterView<?> parent) { }
-        });
-        carLine.addView(carSpinner, new LinearLayout.LayoutParams(0, dp(44), 1));
-        Button cars = quietButton("管理");
-        cars.setOnClickListener(v -> showCarManager());
-        carLine.addView(cars, new LinearLayout.LayoutParams(dp(70), dp(40)));
-        top.addView(carLine);
+        carCard = new LinearLayout(this);
+        carCard.setOrientation(LinearLayout.HORIZONTAL);
+        carCard.setGravity(Gravity.CENTER_VERTICAL);
+        carCard.setPadding(dp(12), dp(10), dp(12), dp(10));
+        carCard.setBackground(round(Color.rgb(243, 249, 246), dp(14), Color.rgb(211, 226, 220)));
+        LinearLayout.LayoutParams carLp = new LinearLayout.LayoutParams(-1, dp(68));
+        carLp.setMargins(0, dp(12), 0, 0);
+        top.addView(carCard, carLp);
+        TextView icon = label("CAR", 12, true);
+        icon.setTextColor(Color.WHITE);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(round(accentDark, dp(12), 0));
+        carCard.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        LinearLayout carCopy = new LinearLayout(this);
+        carCopy.setOrientation(LinearLayout.VERTICAL);
+        carCopy.setPadding(dp(12), 0, dp(8), 0);
+        carNameView = label("当前车辆", 17, true);
+        carMetaView = label("点击切换或管理车辆", 13, false);
+        carMetaView.setTextColor(muted);
+        carCopy.addView(carNameView);
+        carCopy.addView(carMetaView);
+        carCard.addView(carCopy, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView arrow = label("管理", 13, true);
+        arrow.setTextColor(accentDark);
+        arrow.setGravity(Gravity.CENTER);
+        arrow.setBackground(round(Color.WHITE, dp(12), Color.rgb(211, 226, 220)));
+        carCard.addView(arrow, new LinearLayout.LayoutParams(dp(62), dp(40)));
+        carCard.setOnClickListener(v -> showCarManager());
 
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -220,22 +218,27 @@ public class MainActivity extends Activity {
             db.insertCar("我的车", "", "", "汽油", "92", 0, 50, true);
             cars.addAll(db.cars());
         }
-        List<String> names = new ArrayList<>();
         long saved = getPreferences(MODE_PRIVATE).getLong("default_car", cars.get(0).id);
         int selected = 0;
         for (int i = 0; i < cars.size(); i++) {
             Car c = cars.get(i);
-            names.add(c.name + (c.plate.isEmpty() ? "" : " · " + c.plate));
             if (c.id == saved) selected = i;
         }
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, names);
-        carSpinner.setAdapter(adapter);
-        carSpinner.setSelection(selected);
         currentCarId = cars.get(selected).id;
+        updateCarHeader();
     }
 
     private void saveDefaultCar(long id) {
         getPreferences(MODE_PRIVATE).edit().putLong("default_car", id).apply();
+    }
+
+    private void updateCarHeader() {
+        Car c = currentCar();
+        if (carNameView != null) carNameView.setText(c.name);
+        if (carMetaView != null) {
+            String meta = (c.plate.isEmpty() ? "未填写车牌" : c.plate) + " · " + c.fuelType + " · " + c.defaultFuel + " · 油箱 " + one.format(c.tankLiters) + "L";
+            carMetaView.setText(meta);
+        }
     }
 
     private void showDashboard() {
@@ -656,28 +659,68 @@ public class MainActivity extends Activity {
 
     private void showCarManager() {
         LinearLayout list = dialogForm();
+        list.addView(formHero("车辆管理", "点击车辆切换当前车辆，编辑可修改资料。"));
         for (Car c : db.cars()) {
-            TextView row = label(c.name + " · " + c.fuelType + " · " + c.defaultFuel, 16, true);
-            row.setPadding(dp(8), dp(10), dp(8), dp(10));
-            row.setOnClickListener(v -> showCarDialog(c));
-            list.addView(row);
+            list.addView(carManagerRow(c));
         }
-        Button add = pill("添加车辆");
+        Button add = primaryButton("+ 添加车辆");
         add.setOnClickListener(v -> showCarDialog(null));
-        list.addView(add);
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(-1, dp(50));
+        addLp.setMargins(0, dp(4), 0, 0);
+        list.addView(add, addLp);
         new AlertDialog.Builder(this).setTitle("车辆管理").setView(list).setNegativeButton("关闭", null).show();
+    }
+
+    private View carManagerRow(Car c) {
+        LinearLayout card = card();
+        LinearLayout top = row();
+        TextView avatar = label(c.defaultFuel.isEmpty() ? "车" : c.defaultFuel, 13, true);
+        avatar.setGravity(Gravity.CENTER);
+        avatar.setTextColor(Color.WHITE);
+        avatar.setBackground(round(c.id == currentCarId ? accentDark : Color.rgb(91, 93, 86), dp(12), 0));
+        top.addView(avatar, new LinearLayout.LayoutParams(dp(48), dp(48)));
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setPadding(dp(12), 0, dp(8), 0);
+        TextView name = label(c.name + (c.id == currentCarId ? " · 当前" : ""), 17, true);
+        TextView meta = label((c.plate.isEmpty() ? "未填写车牌" : c.plate) + " · " + c.fuelType + " · 油箱 " + one.format(c.tankLiters) + "L", 13, false);
+        meta.setTextColor(muted);
+        copy.addView(name);
+        copy.addView(meta);
+        top.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
+        Button edit = quietButton("编辑");
+        edit.setOnClickListener(v -> showCarDialog(c));
+        top.addView(edit, new LinearLayout.LayoutParams(dp(72), dp(42)));
+        card.addView(top);
+        card.setOnClickListener(v -> {
+            currentCarId = c.id;
+            saveDefaultCar(c.id);
+            updateCarHeader();
+            renderCurrentTab();
+            toast("已切换到 " + c.name);
+        });
+        return card;
     }
 
     private void showCarDialog(Car c) {
         LinearLayout form = dialogForm();
-        EditText name = input("车辆名称", c == null ? "我的车" : c.name, false);
-        EditText brand = input("品牌/型号", c == null ? "" : c.brand, false);
+        form.addView(formHero(c == null ? "添加车辆" : "编辑车辆", "车辆资料会影响默认油品、统计和当前车辆切换。"));
+        EditText name = input("例如 我的车", c == null ? "我的车" : c.name, false);
+        EditText brand = input("品牌 / 型号", c == null ? "" : c.brand, false);
         EditText plate = input("车牌号", c == null ? "" : c.plate, false);
-        EditText fuelType = input("燃油类型", c == null ? "汽油" : c.fuelType, false);
-        EditText defaultFuel = input("默认油品", c == null ? "92" : c.defaultFuel, false);
-        EditText initial = input("初始里程 km", c == null ? "0" : one.format(c.initialOdometer), true);
-        EditText tank = input("油箱容量 L", c == null ? "50" : one.format(c.tankLiters), true);
-        form.addView(name); form.addView(brand); form.addView(plate); form.addView(fuelType); form.addView(defaultFuel); form.addView(initial); form.addView(tank);
+        EditText fuelType = input("汽油 / 柴油 / 混动", c == null ? "汽油" : c.fuelType, false);
+        EditText defaultFuel = input("92 / 95 / 98", c == null ? "92" : c.defaultFuel, false);
+        EditText initial = input("例如 0", c == null ? "0" : one.format(c.initialOdometer), true);
+        EditText tank = input("例如 50", c == null ? "50" : one.format(c.tankLiters), true);
+        LinearLayout basic = formSection("车辆信息");
+        basic.addView(field("车辆名称", name));
+        basic.addView(twoFields(field("品牌/型号", brand), field("车牌号", plate)));
+        form.addView(basic);
+        LinearLayout fuel = formSection("燃油设置");
+        fuel.addView(twoFields(field("燃油类型", fuelType), field("默认油品", defaultFuel)));
+        fuel.addView(twoFields(field("初始里程 km", initial), field("油箱容量 L", tank)));
+        form.addView(fuel);
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(c == null ? "添加车辆" : "编辑车辆")
                 .setView(form)
