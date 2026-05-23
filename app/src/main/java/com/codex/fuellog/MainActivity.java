@@ -415,17 +415,61 @@ public class MainActivity extends Activity {
 
     private View fuelRow(Fuel f, boolean editable) {
         LinearLayout card = card();
-        TextView title = label(f.date + " · " + one.format(f.odometer) + " km", 17, true);
-        card.addView(title);
+        LinearLayout top = row();
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        TextView date = label(f.date, 16, true);
+        TextView odo = label(one.format(f.odometer) + " km", 13, false);
+        odo.setTextColor(muted);
+        left.addView(date);
+        left.addView(odo);
+        top.addView(left, new LinearLayout.LayoutParams(0, -2, 1));
+
         String status = f.full ? "加满" : "未加满";
         if (f.missed) status += " · 漏记";
-        card.addView(label(one.format(f.liters) + " L · ¥" + two.format(f.amount) + " · " + two.format(f.price) + " 元/L · " + status, 14, false));
-        if (f.consumption > 0) {
-            card.addView(label("区间 " + one.format(f.distance) + " km · 油耗 " + two.format(f.consumption) + " L/100km", 14, false));
-        } else {
-            card.addView(label("本条不单独计算油耗", 14, false));
+        top.addView(tag(status, f.full ? accentDark : Color.rgb(183, 117, 43)));
+        card.addView(top);
+
+        LinearLayout focus = row();
+        focus.setPadding(0, dp(12), 0, dp(10));
+        LinearLayout consumption = new LinearLayout(this);
+        consumption.setOrientation(LinearLayout.VERTICAL);
+        TextView cLabel = label("本次油耗", 12, false);
+        cLabel.setTextColor(muted);
+        TextView cValue = label(f.consumption > 0 ? two.format(f.consumption) : "--", 30, true);
+        cValue.setTextColor(f.consumption > 0 ? accentDark : muted);
+        TextView cUnit = label(f.consumption > 0 ? "L/100km" : "待下次加满计算", 12, false);
+        cUnit.setTextColor(muted);
+        consumption.addView(cLabel);
+        consumption.addView(cValue);
+        consumption.addView(cUnit);
+        focus.addView(consumption, new LinearLayout.LayoutParams(0, -2, 1));
+
+        LinearLayout money = new LinearLayout(this);
+        money.setOrientation(LinearLayout.VERTICAL);
+        money.setGravity(Gravity.END);
+        TextView amount = label("¥" + two.format(f.amount), 24, true);
+        amount.setGravity(Gravity.END);
+        TextView liters = label(one.format(f.liters) + " L", 14, false);
+        liters.setTextColor(muted);
+        liters.setGravity(Gravity.END);
+        money.addView(amount);
+        money.addView(liters);
+        focus.addView(money, new LinearLayout.LayoutParams(0, -2, 1));
+        card.addView(focus);
+
+        LinearLayout chips = row();
+        chips.addView(infoChip("区间", f.distance > 0 ? one.format(f.distance) + " km" : "--"));
+        chips.addView(infoChip("油价", f.price > 0 ? two.format(f.price) + " 元/L" : "--"));
+        chips.addView(infoChip("油品", f.fuelType.isEmpty() ? "--" : f.fuelType));
+        card.addView(chips);
+
+        if (!f.station.isEmpty() || !f.note.isEmpty()) {
+            TextView meta = label((f.station.isEmpty() ? "未填写加油站" : f.station) + (f.note.isEmpty() ? "" : " · " + f.note), 13, false);
+            meta.setTextColor(muted);
+            meta.setPadding(0, dp(10), 0, 0);
+            card.addView(meta);
         }
-        if (!f.station.isEmpty() || !f.note.isEmpty()) card.addView(label(f.station + (f.note.isEmpty() ? "" : " · " + f.note), 13, false));
         if (editable) {
             card.setOnClickListener(v -> showFuelDialog(f));
             card.setOnLongClickListener(v -> {
@@ -438,9 +482,24 @@ public class MainActivity extends Activity {
 
     private View entryRow(String table, Entry e) {
         LinearLayout card = card();
-        card.addView(label(e.date + " · " + e.title, 17, true));
-        card.addView(label("¥" + two.format(e.amount) + " · " + one.format(e.odometer) + " km", 14, false));
-        if (!e.note.isEmpty()) card.addView(label(e.note, 13, false));
+        LinearLayout top = row();
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        left.addView(label(e.title, 17, true));
+        TextView sub = label(e.date + " · " + one.format(e.odometer) + " km", 13, false);
+        sub.setTextColor(muted);
+        left.addView(sub);
+        top.addView(left, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView amount = label("¥" + two.format(e.amount), 22, true);
+        amount.setGravity(Gravity.END);
+        top.addView(amount);
+        card.addView(top);
+        if (!e.place.isEmpty() || !e.note.isEmpty()) {
+            TextView meta = label((e.place.isEmpty() ? "" : e.place) + (e.note.isEmpty() ? "" : " · " + e.note), 13, false);
+            meta.setTextColor(muted);
+            meta.setPadding(0, dp(8), 0, 0);
+            card.addView(meta);
+        }
         card.setOnClickListener(v -> {
             if (table.equals("maintenance_records")) showMaintenanceDialog(e);
             else showExpenseDialog(e);
@@ -850,6 +909,32 @@ public class MainActivity extends Activity {
         b.setBackground(active ? round(accentDark, dp(14), 0) : round(surface, dp(14), Color.rgb(232, 235, 229)));
         b.setPadding(dp(2), 0, dp(2), 0);
         return b;
+    }
+
+    private TextView tag(String text, int color) {
+        TextView v = label(text, 12, true);
+        v.setTextColor(color);
+        v.setGravity(Gravity.CENTER);
+        v.setPadding(dp(10), dp(5), dp(10), dp(5));
+        v.setBackground(round(Color.rgb(241, 247, 244), dp(12), Color.rgb(210, 226, 220)));
+        return v;
+    }
+
+    private View infoChip(String title, String value) {
+        LinearLayout chip = new LinearLayout(this);
+        chip.setOrientation(LinearLayout.VERTICAL);
+        chip.setPadding(dp(10), dp(8), dp(10), dp(8));
+        chip.setBackground(round(Color.rgb(246, 248, 245), dp(8), Color.rgb(229, 234, 227)));
+        TextView t = label(title, 11, false);
+        t.setTextColor(muted);
+        TextView v = label(value, 13, true);
+        v.setPadding(0, dp(2), 0, 0);
+        chip.addView(t);
+        chip.addView(v);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
+        lp.setMargins(dp(2), 0, dp(2), 0);
+        chip.setLayoutParams(lp);
+        return chip;
     }
 
     private android.graphics.drawable.GradientDrawable round(int color, int radius, int strokeColor) {
