@@ -42,6 +42,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
@@ -71,6 +72,7 @@ public class MainActivity extends Activity {
     private long currentCarId = -1;
     private int selectedTab = 0;
     private static final int REQ_EXPORT_FILE = 41;
+    private static final int REQ_IMPORT_FILE = 42;
     private final String[] tabTitles = {"首页", "记录", "图表", "费用", "设置"};
     private int accent = Color.rgb(31, 117, 107);
     private int accentDark = Color.rgb(18, 83, 78);
@@ -179,6 +181,9 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 toast("保存失败：" + e.getMessage());
             }
+        }
+        if (requestCode == REQ_IMPORT_FILE && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            importBackup(data.getData());
         }
         pendingExportType = null;
         pendingExportContent = null;
@@ -441,8 +446,11 @@ public class MainActivity extends Activity {
         exportJson.setOnClickListener(v -> exportJson());
         Button exportCsv = quietButton("选择位置保存 CSV");
         exportCsv.setOnClickListener(v -> exportCsv());
+        Button importJson = quietButton("导入 JSON 备份");
+        importJson.setOnClickListener(v -> chooseImportFile());
         box.addView(settingRow("完整备份", "包含车辆、加油、保养、费用和提醒", exportJson));
         box.addView(settingRow("表格导出", "当前车辆加油记录，可用 Excel 查看", exportCsv));
+        box.addView(settingRow("恢复备份", "从 JSON 文件恢复全部车辆和记录", importJson));
 
         box.addView(sectionTitle("危险操作"));
         Button clear = dangerButton("清空当前车辆数据");
@@ -585,12 +593,12 @@ public class MainActivity extends Activity {
 
         LinearLayout extra = formSection("补充信息");
         extra.addView(field(stationName(), station));
-        extra.addView(field("备注", note));
+        extra.addView(tallField("备注", note));
         form.addView(extra);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(existing == null ? (ev ? "新增充电" : "新增加油") : (ev ? "编辑充电" : "编辑加油"))
-                .setView(form)
+                .setView(scrollForm(form))
                 .setPositiveButton("保存", null)
                 .setNegativeButton("取消", null)
                 .create();
@@ -659,12 +667,12 @@ public class MainActivity extends Activity {
         LinearLayout place = formSection("场景信息");
         place.addView(field("充电站/位置", station));
         place.addView(field("停车/服务费", parking));
-        place.addView(field("备注", note));
+        place.addView(tallField("备注", note));
         form.addView(place);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(existing == null ? "新增充电" : "编辑充电")
-                .setView(form)
+                .setView(scrollForm(form))
                 .setPositiveButton("保存", null)
                 .setNegativeButton("取消", null)
                 .create();
@@ -722,7 +730,7 @@ public class MainActivity extends Activity {
         LinearLayout detail = formSection("保养内容");
         detail.addView(field("保养类型", title));
         detail.addView(twoFields(field("金额 元", amount), field("门店", place)));
-        detail.addView(field("备注", note));
+        detail.addView(tallField("备注", note));
         form.addView(detail);
         entryDialog(existing, "maintenance_records", "保养记录", form, date, odo, title, amount, place, note);
     }
@@ -744,7 +752,7 @@ public class MainActivity extends Activity {
         LinearLayout detail = formSection("费用内容");
         detail.addView(field("费用类型", title));
         detail.addView(twoFields(field("金额 元", amount), field("地点/商户", place)));
-        detail.addView(field("备注", note));
+        detail.addView(tallField("备注", note));
         form.addView(detail);
         entryDialog(existing, "expense_records", "费用记录", form, date, odo, title, amount, place, note);
     }
@@ -752,7 +760,7 @@ public class MainActivity extends Activity {
     private void entryDialog(Entry existing, String table, String titleText, LinearLayout form, EditText date, EditText odo, EditText title, EditText amount, EditText place, EditText note) {
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(existing == null ? "新增" + titleText : "编辑" + titleText)
-                .setView(form)
+                .setView(scrollForm(form))
                 .setPositiveButton("保存", null)
                 .setNegativeButton("取消", null)
                 .create();
@@ -780,18 +788,22 @@ public class MainActivity extends Activity {
     private void showCarManager() {
         LinearLayout list = dialogForm();
         list.addView(formHero("车辆管理", "点击车辆切换当前车辆，编辑可修改资料。"));
+        final AlertDialog[] holder = new AlertDialog[1];
         for (Car c : db.cars()) {
-            list.addView(carManagerRow(c));
+            list.addView(carManagerRow(c, () -> {
+                if (holder[0] != null) holder[0].dismiss();
+            }));
         }
         Button add = primaryButton("+ 添加车辆");
         add.setOnClickListener(v -> showCarDialog(null));
         LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(-1, dp(50));
         addLp.setMargins(0, dp(4), 0, 0);
         list.addView(add, addLp);
-        new AlertDialog.Builder(this).setTitle("车辆管理").setView(list).setNegativeButton("关闭", null).show();
+        holder[0] = new AlertDialog.Builder(this).setTitle("车辆管理").setView(scrollForm(list)).setNegativeButton("关闭", null).create();
+        holder[0].show();
     }
 
-    private View carManagerRow(Car c) {
+    private View carManagerRow(Car c, Runnable afterSelect) {
         LinearLayout card = card();
         LinearLayout top = row();
         TextView avatar = label(isElectric(c) ? "电" : (c.defaultFuel.isEmpty() ? "车" : c.defaultFuel), 13, true);
@@ -819,6 +831,7 @@ public class MainActivity extends Activity {
             updateCarHeader();
             renderCurrentTab();
             toast("已切换到 " + c.name);
+            if (afterSelect != null) afterSelect.run();
         });
         return card;
     }
@@ -850,7 +863,7 @@ public class MainActivity extends Activity {
         form.addView(fuel);
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(c == null ? "添加车辆" : "编辑车辆")
-                .setView(form)
+                .setView(scrollForm(form))
                 .setPositiveButton("保存", null)
                 .setNegativeButton("取消", null)
                 .create();
@@ -964,6 +977,28 @@ public class MainActivity extends Activity {
         startActivityForResult(intent, REQ_EXPORT_FILE);
     }
 
+    private void chooseImportFile() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        startActivityForResult(intent, REQ_IMPORT_FILE);
+    }
+
+    private void importBackup(Uri uri) {
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            byte[] buffer = new byte[8192];
+            StringBuilder sb = new StringBuilder();
+            int n;
+            while ((n = in.read(buffer)) > 0) sb.append(new String(buffer, 0, n, "UTF-8"));
+            db.importJson(new JSONObject(sb.toString()));
+            refreshCars();
+            renderCurrentTab();
+            toast("备份已导入");
+        } catch (Exception e) {
+            toast("导入失败：" + e.getMessage());
+        }
+    }
+
     private File exportFile(String name) {
         File dir = new File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "exports");
         if (!dir.exists()) dir.mkdirs();
@@ -1000,6 +1035,15 @@ public class MainActivity extends Activity {
         int p = dp(8);
         form.setPadding(p, p, p, p);
         return form;
+    }
+
+    private ScrollView scrollForm(View form) {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        int max = (int) (getResources().getDisplayMetrics().heightPixels * 0.72f);
+        scroll.addView(form, new ScrollView.LayoutParams(-1, -2));
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(-1, max));
+        return scroll;
     }
 
     private EditText input(String hint, String value, boolean number) {
@@ -1050,13 +1094,25 @@ public class MainActivity extends Activity {
     }
 
     private View field(String title, EditText input) {
+        return fieldWithHeight(title, input, dp(48));
+    }
+
+    private View tallField(String title, EditText input) {
+        input.setSingleLine(false);
+        input.setGravity(Gravity.TOP | Gravity.START);
+        input.setMinLines(2);
+        input.setPadding(dp(12), dp(10), dp(12), dp(10));
+        return fieldWithHeight(title, input, dp(82));
+    }
+
+    private View fieldWithHeight(String title, EditText input, int height) {
         LinearLayout wrap = new LinearLayout(this);
         wrap.setOrientation(LinearLayout.VERTICAL);
         TextView t = label(title, 12, true);
         t.setTextColor(muted);
         t.setPadding(dp(2), 0, 0, dp(5));
         wrap.addView(t);
-        wrap.addView(input, new LinearLayout.LayoutParams(-1, dp(48)));
+        wrap.addView(input, new LinearLayout.LayoutParams(-1, height));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.setMargins(0, 0, 0, dp(10));
         wrap.setLayoutParams(lp);
@@ -1076,16 +1132,17 @@ public class MainActivity extends Activity {
     }
 
     private View checkRow(CheckBox left, CheckBox right) {
-        LinearLayout line = row();
+        LinearLayout line = new LinearLayout(this);
+        line.setOrientation(LinearLayout.VERTICAL);
         line.setPadding(dp(2), 0, dp(2), dp(2));
         left.setBackground(round(Color.rgb(246, 250, 247), dp(10), Color.rgb(218, 228, 222)));
         right.setBackground(round(Color.rgb(246, 250, 247), dp(10), Color.rgb(218, 228, 222)));
         left.setPadding(dp(8), 0, dp(8), 0);
         right.setPadding(dp(8), 0, dp(8), 0);
-        LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(0, dp(48), 1);
-        lp1.setMargins(0, 0, dp(5), 0);
-        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(0, dp(48), 1);
-        lp2.setMargins(dp(5), 0, 0, 0);
+        LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(-1, dp(46));
+        lp1.setMargins(0, 0, 0, dp(6));
+        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(-1, dp(46));
+        lp2.setMargins(0, 0, 0, 0);
         line.addView(left, lp1);
         line.addView(right, lp2);
         return line;
@@ -1719,7 +1776,9 @@ public class MainActivity extends Activity {
         }
 
         String exportEnergyCsv(String table, long carId) {
-            StringBuilder sb = new StringBuilder("date,odometer,liters,amount,price,station,fuel_type,is_full,is_missed,note\n");
+            boolean charging = "charging_records".equals(table);
+            StringBuilder sb = new StringBuilder();
+            sb.append("日期,当前总里程,").append(charging ? "充电量(kWh),电费(元),电价(元/kWh),充电站/位置,充电方式" : "加油量(L),金额(元),油价(元/L),加油站,油品").append(",是否加满/充满,是否漏记补录,备注\n");
             Cursor c = getReadableDatabase().rawQuery("SELECT * FROM " + table + " WHERE car_id=? ORDER BY date,id", new String[]{String.valueOf(carId)});
             while (c.moveToNext()) {
                 sb.append(csv(s(c, "date"))).append(',')
@@ -1735,6 +1794,42 @@ public class MainActivity extends Activity {
             }
             c.close();
             return sb.toString();
+        }
+
+        void importJson(JSONObject root) throws Exception {
+            SQLiteDatabase w = getWritableDatabase();
+            w.beginTransaction();
+            try {
+                String[] tables = {"cars", "fuel_records", "charging_records", "maintenance_records", "expense_records", "reminders"};
+                for (String table : tables) w.delete(table, null, null);
+                importTable(w, root, "cars", new String[]{"id", "name", "brand", "plate", "fuel_type", "default_fuel", "initial_odometer", "tank_liters", "is_default"});
+                importTable(w, root, "fuel_records", new String[]{"id", "car_id", "date", "odometer", "liters", "amount", "price", "station", "fuel_type", "is_full", "is_missed", "note"});
+                importTable(w, root, "charging_records", new String[]{"id", "car_id", "date", "odometer", "liters", "amount", "price", "station", "fuel_type", "is_full", "is_missed", "note"});
+                importTable(w, root, "maintenance_records", new String[]{"id", "car_id", "date", "odometer", "title", "amount", "place", "note"});
+                importTable(w, root, "expense_records", new String[]{"id", "car_id", "date", "odometer", "title", "amount", "place", "note"});
+                importTable(w, root, "reminders", new String[]{"id", "car_id", "title", "message", "due_date"});
+                w.setTransactionSuccessful();
+            } finally {
+                w.endTransaction();
+            }
+            ensureSeed();
+        }
+
+        private void importTable(SQLiteDatabase w, JSONObject root, String table, String[] columns) throws Exception {
+            if (!root.has(table)) return;
+            JSONArray arr = root.getJSONArray(table);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                ContentValues cv = new ContentValues();
+                for (String col : columns) {
+                    if (!o.has(col) || o.isNull(col)) continue;
+                    Object value = o.get(col);
+                    if (value instanceof Integer || value instanceof Long) cv.put(col, ((Number) value).longValue());
+                    else if (value instanceof Number) cv.put(col, ((Number) value).doubleValue());
+                    else cv.put(col, String.valueOf(value));
+                }
+                w.insert(table, null, cv);
+            }
         }
 
         private JSONArray tableJson(String table, String where) throws Exception {
