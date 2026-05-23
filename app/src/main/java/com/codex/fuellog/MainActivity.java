@@ -115,7 +115,7 @@ public class MainActivity extends Activity {
         titleBar.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout titles = new LinearLayout(this);
         titles.setOrientation(LinearLayout.VERTICAL);
-        screenTitle = label("油电账本", 24, true);
+        screenTitle = label("车耗记", 24, true);
         screenSubtitle = label("记录每一次加油，长期看清真实成本", 13, false);
         screenSubtitle.setTextColor(muted);
         titles.addView(screenTitle);
@@ -283,7 +283,7 @@ public class MainActivity extends Activity {
 
     private void showDashboard() {
         selectedTab = 0;
-        setHeader("油电账本", "一眼看清油耗电耗和用车成本");
+        setHeader("车耗记", "一眼看清油耗电耗和用车成本");
         clear();
         ScrollView scroll = scroll();
         LinearLayout box = column();
