@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
         titles.addView(screenSubtitle);
         titleBar.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
         Button addFuel = primaryButton("+ 记录");
-        addFuel.setOnClickListener(v -> showFuelDialog(null));
+        addFuel.setOnClickListener(v -> showEnergyDialog(null));
         titleBar.addView(addFuel, new LinearLayout.LayoutParams(dp(104), dp(44)));
         top.addView(titleBar);
 
@@ -272,6 +272,10 @@ public class MainActivity extends Activity {
         return isElectric(currentCar()) ? "充电站" : "加油站";
     }
 
+    private String energyTable() {
+        return isElectric(currentCar()) ? "charging_records" : "fuel_records";
+    }
+
     private void showDashboard() {
         selectedTab = 0;
         setHeader("油耗记录", "一眼看清油耗、里程和用车成本");
@@ -279,11 +283,11 @@ public class MainActivity extends Activity {
         ScrollView scroll = scroll();
         LinearLayout box = column();
         scroll.addView(box);
-        Stats s = db.stats(currentCarId);
+        Stats s = db.stats(energyTable(), currentCarId);
         box.addView(hero(s));
         LinearLayout quick = row();
         Button fuel = primaryButton(energyAction());
-        fuel.setOnClickListener(v -> showFuelDialog(null));
+        fuel.setOnClickListener(v -> showEnergyDialog(null));
         Button upkeep = quietButton("记保养");
         upkeep.setOnClickListener(v -> showMaintenanceDialog(null));
         Button expense = quietButton("记费用");
@@ -313,15 +317,15 @@ public class MainActivity extends Activity {
             box.addView(warn("最近一次" + consumptionName() + "高于平均值 25% 以上，可检查胎压、路况或数据输入。"));
         }
         if (s.recentDaysWithoutFuel > 30) {
-            box.addView(warn("超过 30 天没有加油记录，若最近加过油可以补记。"));
+            box.addView(warn("超过 30 天没有" + (isElectric(currentCar()) ? "充电" : "加油") + "记录，若最近记录过可以补记。"));
         }
 
         box.addView(sectionTitle(isElectric(currentCar()) ? "最近充电" : "最近加油"));
-        List<Fuel> fuels = db.fuels(currentCarId, 3);
+        List<Fuel> fuels = db.fuels(energyTable(), currentCarId, 3);
         if (fuels.isEmpty()) {
             box.addView(empty(isElectric(currentCar()) ? "还没有充电记录。第一次充满作为基准，之后就能计算电耗。" : "还没有加油记录。第一次加满作为基准，之后就能计算油耗。"));
         } else {
-            for (Fuel f : fuels) box.addView(fuelRow(f, false));
+            for (Fuel f : fuels) box.addView(fuelRow(f, false, energyTable()));
         }
         rootAdd(scroll);
     }
@@ -335,7 +339,7 @@ public class MainActivity extends Activity {
         panel.addView(hint);
         LinearLayout actions = row();
         Button fuel = primaryButton(energyAction());
-        fuel.setOnClickListener(v -> showFuelDialog(null));
+        fuel.setOnClickListener(v -> showEnergyDialog(null));
         Button maintenance = quietButton("保养");
         maintenance.setOnClickListener(v -> showMaintenanceDialog(null));
         Button expense = quietButton("费用");
@@ -348,7 +352,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAdd() {
-        showFuelDialog(null);
+        showEnergyDialog(null);
     }
 
     private void showRecords() {
@@ -360,9 +364,9 @@ public class MainActivity extends Activity {
         scroll.addView(box);
         addRecordActions(box);
         box.addView(sectionTitle(isElectric(currentCar()) ? "充电记录" : "加油记录"));
-        List<Fuel> fuels = db.fuels(currentCarId, 0);
+        List<Fuel> fuels = db.fuels(energyTable(), currentCarId, 0);
         if (fuels.isEmpty()) box.addView(empty(isElectric(currentCar()) ? "暂无充电记录" : "暂无加油记录"));
-        for (Fuel f : fuels) box.addView(fuelRow(f, true));
+        for (Fuel f : fuels) box.addView(fuelRow(f, true, energyTable()));
         box.addView(sectionTitle("保养记录"));
         List<Entry> ms = db.entries("maintenance_records", currentCarId, 0);
         if (ms.isEmpty()) box.addView(empty("暂无保养记录"));
@@ -383,12 +387,12 @@ public class MainActivity extends Activity {
         scroll.addView(box);
         box.addView(chartHero());
         box.addView(sectionTitle("数据可视化"));
-        List<FuelPoint> points = db.fuelPoints(currentCarId);
+        List<FuelPoint> points = db.fuelPoints(energyTable(), currentCarId);
         box.addView(chartCard(consumptionName() + "趋势 " + consumptionUnit(), new ChartView(this, points, ChartView.MODE_CONSUMPTION)));
         box.addView(chartCard((isElectric(currentCar()) ? "电价趋势 " : "油价趋势 ") + priceUnit(), new ChartView(this, points, ChartView.MODE_PRICE)));
-        box.addView(chartCard(isElectric(currentCar()) ? "月度电费" : "月度油费", new ChartView(this, db.monthPoints(currentCarId, "fuel"), ChartView.MODE_BAR)));
-        box.addView(chartCard("月度总用车成本", new ChartView(this, db.monthPoints(currentCarId, "all"), ChartView.MODE_BAR)));
-        box.addView(chartCard(stationName() + "费用占比", new ChartView(this, db.stationPoints(currentCarId), ChartView.MODE_PIE)));
+        box.addView(chartCard(isElectric(currentCar()) ? "月度电费" : "月度油费", new ChartView(this, db.monthPoints(energyTable(), currentCarId, "fuel"), ChartView.MODE_BAR)));
+        box.addView(chartCard("月度总用车成本", new ChartView(this, db.monthPoints(energyTable(), currentCarId, "all"), ChartView.MODE_BAR)));
+        box.addView(chartCard(stationName() + "费用占比", new ChartView(this, db.stationPoints(energyTable(), currentCarId), ChartView.MODE_PIE)));
         rootAdd(scroll);
     }
 
@@ -399,7 +403,7 @@ public class MainActivity extends Activity {
         ScrollView scroll = scroll();
         LinearLayout box = column();
         scroll.addView(box);
-        Stats s = db.stats(currentCarId);
+        Stats s = db.stats(energyTable(), currentCarId);
         box.addView(costHero(s));
         box.addView(sectionTitle("费用分析"));
         LinearLayout row1 = row();
@@ -447,7 +451,7 @@ public class MainActivity extends Activity {
         rootAdd(scroll);
     }
 
-    private View fuelRow(Fuel f, boolean editable) {
+    private View fuelRow(Fuel f, boolean editable, String table) {
         boolean ev = isElectric(currentCar());
         LinearLayout card = card();
         LinearLayout top = row();
@@ -506,9 +510,9 @@ public class MainActivity extends Activity {
             card.addView(meta);
         }
         if (editable) {
-            card.setOnClickListener(v -> showFuelDialog(f));
+            card.setOnClickListener(v -> showEnergyDialog(f));
             card.setOnLongClickListener(v -> {
-                confirmDelete("fuel_records", f.id);
+                confirmDelete(table, f.id);
                 return true;
             });
         }
@@ -546,15 +550,20 @@ public class MainActivity extends Activity {
         return card;
     }
 
+    private void showEnergyDialog(Fuel existing) {
+        if (isElectric(currentCar())) showChargeDialog(existing);
+        else showFuelDialog(existing);
+    }
+
     private void showFuelDialog(Fuel existing) {
-        boolean ev = isElectric(currentCar());
+        boolean ev = false;
         LinearLayout form = dialogForm();
-        form.addView(formHero(ev ? "记录这一次充电" : "记录这一次加油", "填两个价格相关数据，第三个会自动计算。"));
+        form.addView(formHero("记录这一次加油", "填加油量、金额或油价中的任意两项，第三项自动计算。"));
         EditText date = input("请选择日期", existing == null ? today() : existing.date, false);
         EditText odo = input("例如 35680", existing == null ? "" : one.format(existing.odometer), true);
         EditText liters = input(ev ? "例如 38.5" : "例如 42.5", existing == null ? "" : one.format(existing.liters), true);
         EditText amount = input(ev ? "例如 62" : "例如 320", existing == null ? "" : two.format(existing.amount), true);
-        EditText price = input(ev ? "例如 1.60" : "例如 7.53", existing == null ? defaultFuelPrice() : two.format(existing.price), true);
+        EditText price = input("例如 7.53", existing == null ? defaultEnergyPrice() : two.format(existing.price), true);
         EditText station = input(ev ? "特来电 / 星星充电 / 家充" : "中石化 / 壳牌 / 其他", existing == null ? "" : existing.station, false);
         EditText fuelType = input(ev ? "快充 / 慢充 / 家充" : "92 / 95 / 98 / 柴油", existing == null ? currentCar().defaultFuel : existing.fuelType, false);
         fuelType.setOnClickListener(v -> chooseValue(fuelType, ev ? new String[]{"快充", "慢充", "家充", "公共充电", "免费充电"} : new String[]{"92", "95", "98", "柴油"}));
@@ -612,6 +621,83 @@ public class MainActivity extends Activity {
             cv.put("note", text(note, ""));
             if (existing == null) db.insert("fuel_records", cv);
             else db.update("fuel_records", existing.id, cv);
+            dialog.dismiss();
+            hideKeyboard(odo);
+            renderCurrentTab();
+        }));
+        dialog.show();
+    }
+
+    private void showChargeDialog(Fuel existing) {
+        LinearLayout form = dialogForm();
+        form.addView(formHero("记录这一次充电", "按充电场景记录电量、电费和充电方式，电耗独立统计。"));
+        EditText date = input("请选择日期", existing == null ? today() : existing.date, false);
+        EditText odo = input("例如 35680", existing == null ? "" : one.format(existing.odometer), true);
+        EditText kwh = input("例如 38.5", existing == null ? "" : one.format(existing.liters), true);
+        EditText fee = input("例如 62", existing == null ? "" : two.format(existing.amount), true);
+        EditText price = input("例如 1.60", existing == null ? defaultEnergyPrice() : two.format(existing.price), true);
+        EditText station = input("特来电 / 星星充电 / 家充", existing == null ? "" : existing.station, false);
+        EditText chargeType = input("快充 / 慢充 / 家充", existing == null ? currentCar().defaultFuel : existing.fuelType, false);
+        chargeType.setOnClickListener(v -> chooseValue(chargeType, new String[]{"快充", "慢充", "家充", "公共充电", "免费充电"}));
+        CheckBox full = check("本次充满", existing == null || existing.full);
+        CheckBox missed = check("漏记后补录/跳过本区间电耗", existing != null && existing.missed);
+        EditText parking = input("例如 停车费 8 元 / 免费停车", "", false);
+        EditText note = input("充电速度、排队、优惠、电池温度等", existing == null ? "" : existing.note, false);
+        date.setOnClickListener(v -> pickDate(date));
+
+        LinearLayout basic = formSection("基础信息");
+        basic.addView(field("日期", date));
+        basic.addView(field("当前总里程 km", odo));
+        form.addView(basic);
+
+        LinearLayout charge = formSection("充电数据");
+        charge.addView(twoFields(field("充电量 kWh", kwh), field("电费 元", fee)));
+        charge.addView(twoFields(field("电价 元/kWh", price), field("充电方式", chargeType)));
+        charge.addView(checkRow(full, missed));
+        form.addView(charge);
+
+        LinearLayout place = formSection("场景信息");
+        place.addView(field("充电站/位置", station));
+        place.addView(field("停车/服务费", parking));
+        place.addView(field("备注", note));
+        form.addView(place);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(existing == null ? "新增充电" : "编辑充电")
+                .setView(form)
+                .setPositiveButton("保存", null)
+                .setNegativeButton("取消", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            double l = num(kwh), a = num(fee), p = num(price);
+            if (l <= 0 && a > 0 && p > 0) l = a / p;
+            if (a <= 0 && l > 0 && p > 0) a = l * p;
+            if (p <= 0 && l > 0 && a > 0) p = a / l;
+            if (num(odo) <= 0 || l <= 0) {
+                toast("里程和充电量必须大于 0");
+                return;
+            }
+            if (!validOdometer(existing == null ? -1 : existing.id, num(odo))) {
+                toast("里程不能小于上一条记录，可编辑历史记录修正");
+                return;
+            }
+            String noteText = text(note, "");
+            String parkingText = text(parking, "");
+            if (!parkingText.isEmpty()) noteText = noteText.isEmpty() ? parkingText : parkingText + " · " + noteText;
+            ContentValues cv = new ContentValues();
+            cv.put("car_id", currentCarId);
+            cv.put("date", text(date, today()));
+            cv.put("odometer", num(odo));
+            cv.put("liters", l);
+            cv.put("amount", a);
+            cv.put("price", p);
+            cv.put("station", text(station, ""));
+            cv.put("fuel_type", text(chargeType, ""));
+            cv.put("is_full", full.isChecked() ? 1 : 0);
+            cv.put("is_missed", missed.isChecked() ? 1 : 0);
+            cv.put("note", noteText);
+            if (existing == null) db.insert("charging_records", cv);
+            else db.update("charging_records", existing.id, cv);
             dialog.dismiss();
             hideKeyboard(odo);
             renderCurrentTab();
@@ -749,15 +835,6 @@ public class MainActivity extends Activity {
         EditText defaultFuel = input("92 / 95 / 98 / 快充", c == null ? "92" : c.defaultFuel, false);
         EditText initial = input("例如 0", c == null ? "0" : one.format(c.initialOdometer), true);
         EditText tank = input("例如 50", c == null ? "50" : one.format(c.tankLiters), true);
-        fuelType.setOnClickListener(v -> chooseValue(fuelType, new String[]{"汽油", "柴油", "混动", "电车"}, () -> {
-            if (fuelType.getText().toString().contains("电")) {
-                if (defaultFuel.getText().toString().matches("92|95|98|柴油")) defaultFuel.setText("快充");
-                if (num(tank) == 50) tank.setText("60");
-            } else {
-                if (defaultFuel.getText().toString().contains("充")) defaultFuel.setText("92");
-                if (num(tank) == 60) tank.setText("50");
-            }
-        }));
         defaultFuel.setOnClickListener(v -> {
             boolean ev = fuelType.getText().toString().contains("电");
             chooseValue(defaultFuel, ev ? new String[]{"快充", "慢充", "家充", "公共充电"} : new String[]{"92", "95", "98", "柴油"});
@@ -765,10 +842,10 @@ public class MainActivity extends Activity {
         LinearLayout basic = formSection("车辆信息");
         basic.addView(field("车辆名称", name));
         basic.addView(twoFields(field("品牌/型号", brand), field("车牌号", plate)));
-        basic.addView(plateProvinceRow(plate));
         form.addView(basic);
         LinearLayout fuel = formSection("能源设置");
-        fuel.addView(twoFields(field("能源类型", fuelType), field("默认油品/充电", defaultFuel)));
+        fuel.addView(energyTypeButtons(fuelType, defaultFuel, tank));
+        fuel.addView(field("默认油品/充电", defaultFuel));
         fuel.addView(twoFields(field("初始里程 km", initial), field("油箱/电池容量", tank)));
         form.addView(fuel);
         AlertDialog dialog = new AlertDialog.Builder(this)
@@ -871,7 +948,7 @@ public class MainActivity extends Activity {
 
     private void exportCsv() {
         try {
-            chooseExportFile("fuel-records.csv", "text/csv", db.exportFuelCsv(currentCarId));
+            chooseExportFile(isElectric(currentCar()) ? "charging-records.csv" : "fuel-records.csv", "text/csv", db.exportEnergyCsv(energyTable(), currentCarId));
         } catch (Exception e) {
             toast("导出失败：" + e.getMessage());
         }
@@ -903,7 +980,7 @@ public class MainActivity extends Activity {
     }
 
     private boolean validOdometer(long editingId, double odometer) {
-        Fuel last = db.lastFuel(currentCarId, editingId);
+        Fuel last = db.lastFuel(energyTable(), currentCarId, editingId);
         return last == null || odometer >= last.odometer || editingId > 0;
     }
 
@@ -912,8 +989,8 @@ public class MainActivity extends Activity {
         return cars.get(0);
     }
 
-    private String defaultFuelPrice() {
-        Fuel last = db.lastFuel(currentCarId, -1);
+    private String defaultEnergyPrice() {
+        Fuel last = db.lastFuel(energyTable(), currentCarId, -1);
         return last == null || last.price <= 0 ? "" : two.format(last.price);
     }
 
@@ -1014,6 +1091,47 @@ public class MainActivity extends Activity {
         return line;
     }
 
+    private View energyTypeButtons(EditText fuelType, EditText defaultFuel, EditText capacity) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        TextView title = label("车辆类型", 12, true);
+        title.setTextColor(muted);
+        title.setPadding(dp(2), 0, 0, dp(5));
+        wrap.addView(title);
+        LinearLayout line = row();
+        Button oil = quietButton("油车");
+        Button electric = quietButton("电车");
+        Runnable refresh = () -> {
+            boolean ev = fuelType.getText().toString().contains("电");
+            oil.setTextColor(ev ? muted : Color.WHITE);
+            oil.setBackground(ev ? round(Color.rgb(246, 250, 247), dp(14), Color.rgb(218, 228, 222)) : round(accentDark, dp(14), 0));
+            electric.setTextColor(ev ? Color.WHITE : muted);
+            electric.setBackground(ev ? round(accentDark, dp(14), 0) : round(Color.rgb(246, 250, 247), dp(14), Color.rgb(218, 228, 222)));
+        };
+        oil.setOnClickListener(v -> {
+            fuelType.setText("汽油");
+            if (defaultFuel.getText().toString().contains("充")) defaultFuel.setText("92");
+            if (num(capacity) == 60) capacity.setText("50");
+            refresh.run();
+        });
+        electric.setOnClickListener(v -> {
+            fuelType.setText("电车");
+            if (defaultFuel.getText().toString().matches("92|95|98|柴油")) defaultFuel.setText("快充");
+            if (num(capacity) == 50) capacity.setText("60");
+            refresh.run();
+        });
+        line.addView(oil, new LinearLayout.LayoutParams(0, dp(48), 1));
+        LinearLayout.LayoutParams evLp = new LinearLayout.LayoutParams(0, dp(48), 1);
+        evLp.setMargins(dp(8), 0, 0, 0);
+        line.addView(electric, evLp);
+        wrap.addView(line);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, dp(10));
+        wrap.setLayoutParams(lp);
+        refresh.run();
+        return wrap;
+    }
+
     private void chooseValue(EditText target, String[] values) {
         chooseValue(target, values, null);
     }
@@ -1026,38 +1144,6 @@ public class MainActivity extends Activity {
                     if (after != null) after.run();
                 })
                 .show();
-    }
-
-    private View plateProvinceRow(EditText target) {
-        LinearLayout wrap = new LinearLayout(this);
-        wrap.setOrientation(LinearLayout.VERTICAL);
-        TextView title = label("车牌省份快捷输入", 12, true);
-        title.setTextColor(muted);
-        title.setPadding(dp(2), 0, 0, dp(5));
-        wrap.addView(title);
-        LinearLayout line = row();
-        String[] provinces = {"京", "沪", "粤", "浙", "苏", "川", "鲁"};
-        for (String p : provinces) {
-            TextView b = label(p, 13, true);
-            b.setGravity(Gravity.CENTER);
-            b.setTextColor(accentDark);
-            b.setBackground(round(Color.rgb(246, 250, 247), dp(10), Color.rgb(218, 228, 222)));
-            b.setOnClickListener(v -> {
-                String current = target.getText().toString().trim();
-                if (current.length() == 0 || current.substring(0, 1).matches("[\\u4e00-\\u9fa5]")) {
-                    target.setText(((TextView) v).getText().toString() + (current.length() > 1 ? current.substring(1) : ""));
-                    target.setSelection(target.getText().length());
-                }
-            });
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1);
-            lp.setMargins(dp(2), 0, dp(2), 0);
-            line.addView(b, lp);
-        }
-        wrap.addView(line);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(0, 0, 0, dp(10));
-        wrap.setLayoutParams(lp);
-        return wrap;
     }
 
     private CheckBox check(String text, boolean checked) {
@@ -1426,18 +1512,23 @@ public class MainActivity extends Activity {
 
     public static class Db extends SQLiteOpenHelper {
         Db(Context context) {
-            super(context, "fuel_log.db", null, 1);
+            super(context, "fuel_log.db", null, 2);
         }
 
         @Override public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE cars(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,brand TEXT,plate TEXT,fuel_type TEXT,default_fuel TEXT,initial_odometer REAL,tank_liters REAL,is_default INTEGER)");
             db.execSQL("CREATE TABLE fuel_records(id INTEGER PRIMARY KEY AUTOINCREMENT,car_id INTEGER,date TEXT,odometer REAL,liters REAL,amount REAL,price REAL,station TEXT,fuel_type TEXT,is_full INTEGER,is_missed INTEGER,note TEXT)");
+            db.execSQL("CREATE TABLE charging_records(id INTEGER PRIMARY KEY AUTOINCREMENT,car_id INTEGER,date TEXT,odometer REAL,liters REAL,amount REAL,price REAL,station TEXT,fuel_type TEXT,is_full INTEGER,is_missed INTEGER,note TEXT)");
             db.execSQL("CREATE TABLE maintenance_records(id INTEGER PRIMARY KEY AUTOINCREMENT,car_id INTEGER,date TEXT,odometer REAL,title TEXT,amount REAL,place TEXT,note TEXT)");
             db.execSQL("CREATE TABLE expense_records(id INTEGER PRIMARY KEY AUTOINCREMENT,car_id INTEGER,date TEXT,odometer REAL,title TEXT,amount REAL,place TEXT,note TEXT)");
             db.execSQL("CREATE TABLE reminders(id INTEGER PRIMARY KEY AUTOINCREMENT,car_id INTEGER,title TEXT,message TEXT,due_date TEXT)");
         }
 
-        @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { }
+        @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+            if (oldVersion < 2) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS charging_records(id INTEGER PRIMARY KEY AUTOINCREMENT,car_id INTEGER,date TEXT,odometer REAL,liters REAL,amount REAL,price REAL,station TEXT,fuel_type TEXT,is_full INTEGER,is_missed INTEGER,note TEXT)");
+            }
+        }
 
         void ensureSeed() {
             Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM cars", null);
@@ -1470,6 +1561,7 @@ public class MainActivity extends Activity {
             SQLiteDatabase w = getWritableDatabase();
             String[] args = {String.valueOf(carId)};
             w.delete("fuel_records", "car_id=?", args);
+            w.delete("charging_records", "car_id=?", args);
             w.delete("maintenance_records", "car_id=?", args);
             w.delete("expense_records", "car_id=?", args);
             w.delete("reminders", "car_id=?", args);
@@ -1490,8 +1582,8 @@ public class MainActivity extends Activity {
             return list;
         }
 
-        Fuel lastFuel(long carId, long excludeId) {
-            String sql = excludeId > 0 ? "SELECT * FROM fuel_records WHERE car_id=? AND id<>? ORDER BY odometer DESC,id DESC LIMIT 1" : "SELECT * FROM fuel_records WHERE car_id=? ORDER BY odometer DESC,id DESC LIMIT 1";
+        Fuel lastFuel(String table, long carId, long excludeId) {
+            String sql = excludeId > 0 ? "SELECT * FROM " + table + " WHERE car_id=? AND id<>? ORDER BY odometer DESC,id DESC LIMIT 1" : "SELECT * FROM " + table + " WHERE car_id=? ORDER BY odometer DESC,id DESC LIMIT 1";
             String[] args = excludeId > 0 ? new String[]{String.valueOf(carId), String.valueOf(excludeId)} : new String[]{String.valueOf(carId)};
             Cursor c = getReadableDatabase().rawQuery(sql, args);
             Fuel f = c.moveToFirst() ? fuel(c) : null;
@@ -1499,10 +1591,10 @@ public class MainActivity extends Activity {
             return f;
         }
 
-        List<Fuel> fuels(long carId, int limit) {
-            Map<Long, FuelCalc> calc = consumptionMap(carId);
+        List<Fuel> fuels(String table, long carId, int limit) {
+            Map<Long, FuelCalc> calc = consumptionMap(table, carId);
             List<Fuel> list = new ArrayList<>();
-            String sql = "SELECT * FROM fuel_records WHERE car_id=? ORDER BY date DESC,odometer DESC,id DESC" + (limit > 0 ? " LIMIT " + limit : "");
+            String sql = "SELECT * FROM " + table + " WHERE car_id=? ORDER BY date DESC,odometer DESC,id DESC" + (limit > 0 ? " LIMIT " + limit : "");
             Cursor c = getReadableDatabase().rawQuery(sql, new String[]{String.valueOf(carId)});
             while (c.moveToNext()) {
                 Fuel f = fuel(c);
@@ -1525,9 +1617,9 @@ public class MainActivity extends Activity {
             return list;
         }
 
-        Stats stats(long carId) {
+        Stats stats(String table, long carId) {
             Stats st = new Stats();
-            List<Fuel> fuels = fuels(carId, 0);
+            List<Fuel> fuels = fuels(table, carId, 0);
             double sumCons = 0;
             int consCount = 0;
             for (Fuel f : fuels) {
@@ -1551,9 +1643,9 @@ public class MainActivity extends Activity {
             return st;
         }
 
-        List<FuelPoint> fuelPoints(long carId) {
+        List<FuelPoint> fuelPoints(String table, long carId) {
             List<FuelPoint> list = new ArrayList<>();
-            List<Fuel> fuels = fuels(carId, 0);
+            List<Fuel> fuels = fuels(table, carId, 0);
             for (int i = fuels.size() - 1; i >= 0; i--) {
                 Fuel f = fuels.get(i);
                 FuelPoint p = new FuelPoint();
@@ -1565,9 +1657,9 @@ public class MainActivity extends Activity {
             return list;
         }
 
-        List<FuelPoint> monthPoints(long carId, String mode) {
+        List<FuelPoint> monthPoints(String energyTable, long carId, String mode) {
             Map<String, Double> map = new java.util.TreeMap<>();
-            addMonthCosts(map, "fuel_records", carId, "amount");
+            addMonthCosts(map, energyTable, carId, "amount");
             if ("all".equals(mode)) {
                 addMonthCosts(map, "maintenance_records", carId, "amount");
                 addMonthCosts(map, "expense_records", carId, "amount");
@@ -1582,9 +1674,9 @@ public class MainActivity extends Activity {
             return points;
         }
 
-        List<FuelPoint> stationPoints(long carId) {
+        List<FuelPoint> stationPoints(String table, long carId) {
             Map<String, Double> map = new HashMap<>();
-            Cursor c = getReadableDatabase().rawQuery("SELECT station,SUM(amount) total FROM fuel_records WHERE car_id=? GROUP BY station", new String[]{String.valueOf(carId)});
+            Cursor c = getReadableDatabase().rawQuery("SELECT station,SUM(amount) total FROM " + table + " WHERE car_id=? GROUP BY station", new String[]{String.valueOf(carId)});
             while (c.moveToNext()) {
                 String station = c.getString(0);
                 if (station == null || station.trim().isEmpty()) station = "未填写";
@@ -1619,15 +1711,16 @@ public class MainActivity extends Activity {
             JSONObject root = new JSONObject();
             root.put("cars", tableJson("cars", null));
             root.put("fuel_records", tableJson("fuel_records", null));
+            root.put("charging_records", tableJson("charging_records", null));
             root.put("maintenance_records", tableJson("maintenance_records", null));
             root.put("expense_records", tableJson("expense_records", null));
             root.put("reminders", tableJson("reminders", null));
             return root;
         }
 
-        String exportFuelCsv(long carId) {
+        String exportEnergyCsv(String table, long carId) {
             StringBuilder sb = new StringBuilder("date,odometer,liters,amount,price,station,fuel_type,is_full,is_missed,note\n");
-            Cursor c = getReadableDatabase().rawQuery("SELECT * FROM fuel_records WHERE car_id=? ORDER BY date,id", new String[]{String.valueOf(carId)});
+            Cursor c = getReadableDatabase().rawQuery("SELECT * FROM " + table + " WHERE car_id=? ORDER BY date,id", new String[]{String.valueOf(carId)});
             while (c.moveToNext()) {
                 sb.append(csv(s(c, "date"))).append(',')
                         .append(d(c, "odometer")).append(',')
@@ -1662,9 +1755,9 @@ public class MainActivity extends Activity {
             return arr;
         }
 
-        private Map<Long, FuelCalc> consumptionMap(long carId) {
+        private Map<Long, FuelCalc> consumptionMap(String table, long carId) {
             Map<Long, FuelCalc> map = new HashMap<>();
-            Cursor c = getReadableDatabase().rawQuery("SELECT * FROM fuel_records WHERE car_id=? ORDER BY odometer ASC,id ASC", new String[]{String.valueOf(carId)});
+            Cursor c = getReadableDatabase().rawQuery("SELECT * FROM " + table + " WHERE car_id=? ORDER BY odometer ASC,id ASC", new String[]{String.valueOf(carId)});
             Fuel lastFull = null;
             double pendingLiters = 0;
             while (c.moveToNext()) {
