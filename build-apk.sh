@@ -51,9 +51,9 @@ fi
   --ks "$ROOT/debug.keystore" \
   --ks-pass pass:android \
   --key-pass pass:android \
-  --out "$BUILD/油耗记录-debug.apk" \
+  --out "$BUILD/油电账本-debug.apk" \
   "$BUILD/app-aligned.apk"
 
-"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$BUILD/油耗记录-debug.apk"
-cp "$BUILD/油耗记录-debug.apk" "$ROOT/dist/油耗记录.apk"
-ls -lh "$ROOT/dist/油耗记录.apk"
+"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$BUILD/油电账本-debug.apk"
+cp "$BUILD/油电账本-debug.apk" "$ROOT/dist/油电账本.apk"
+ls -lh "$ROOT/dist/油电账本.apk"
