@@ -62,4 +62,9 @@ dist/车耗记-release.apk
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Copyright (c) 2026 BILSON093.
+
+This project is source-available for non-commercial use only. Commercial use,
+redistribution in paid products, paid services, advertising-supported releases,
+subscriptions, in-app purchases, and other revenue-generating uses require prior
+written permission from BILSON093. See [LICENSE](LICENSE) for details.
