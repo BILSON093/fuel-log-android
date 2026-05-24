@@ -87,10 +87,13 @@ public class MainActivity extends Activity {
         StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder().build());
         db = new Db(this);
         db.ensureSeed();
+        AdManager.init(this);
         requestNotificationPermission();
         buildShell();
         refreshCars();
         showDashboard();
+        AdManager.showSplash(this);
+        AdManager.requestFloating(this);
     }
 
     private void requestNotificationPermission() {
@@ -301,6 +304,12 @@ public class MainActivity extends Activity {
         quick.addView(upkeep, new LinearLayout.LayoutParams(0, dp(50), 1));
         quick.addView(expense, new LinearLayout.LayoutParams(0, dp(50), 1));
         box.addView(quick);
+        View feedAd = AdManager.createFeedAd(this);
+        if (feedAd != null) {
+            LinearLayout.LayoutParams adLp = new LinearLayout.LayoutParams(-1, -2);
+            adLp.setMargins(0, dp(12), 0, dp(4));
+            box.addView(feedAd, adLp);
+        }
         box.addView(sectionTitle("本车概览"));
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
@@ -393,11 +402,14 @@ public class MainActivity extends Activity {
         box.addView(chartHero());
         box.addView(sectionTitle("数据可视化"));
         List<FuelPoint> points = db.fuelPoints(energyTable(), currentCarId);
-        box.addView(chartCard(consumptionName() + "趋势 " + consumptionUnit(), new ChartView(this, points, ChartView.MODE_CONSUMPTION)));
-        box.addView(chartCard((isElectric(currentCar()) ? "电价趋势 " : "油价趋势 ") + priceUnit(), new ChartView(this, points, ChartView.MODE_PRICE)));
-        box.addView(chartCard(isElectric(currentCar()) ? "月度电费" : "月度油费", new ChartView(this, db.monthPoints(energyTable(), currentCarId, "fuel"), ChartView.MODE_BAR)));
-        box.addView(chartCard("月度总用车成本", new ChartView(this, db.monthPoints(energyTable(), currentCarId, "all"), ChartView.MODE_BAR)));
-        box.addView(chartCard(stationName() + "费用占比", new ChartView(this, db.stationPoints(energyTable(), currentCarId), ChartView.MODE_PIE)));
+        List<FuelPoint> energyMonths = db.monthPoints(energyTable(), currentCarId, "fuel");
+        List<FuelPoint> allMonths = db.monthPoints(energyTable(), currentCarId, "all");
+        List<FuelPoint> stationPoints = db.stationPoints(energyTable(), currentCarId);
+        box.addView(chartCard(consumptionName() + "趋势 " + consumptionUnit(), points, ChartView.MODE_CONSUMPTION));
+        box.addView(chartCard((isElectric(currentCar()) ? "电价趋势 " : "油价趋势 ") + priceUnit(), points, ChartView.MODE_PRICE));
+        box.addView(chartCard(isElectric(currentCar()) ? "月度电费" : "月度油费", energyMonths, ChartView.MODE_BAR));
+        box.addView(chartCard("月度总用车成本", allMonths, ChartView.MODE_BAR));
+        box.addView(chartCard(stationName() + "费用占比", stationPoints, ChartView.MODE_PIE));
         rootAdd(scroll);
     }
 
@@ -789,13 +801,17 @@ public class MainActivity extends Activity {
         LinearLayout list = dialogForm();
         list.addView(formHero("车辆管理", "点击车辆切换当前车辆，编辑可修改资料。"));
         final AlertDialog[] holder = new AlertDialog[1];
+        Runnable refreshManager = () -> {
+            if (holder[0] != null) holder[0].dismiss();
+            showCarManager();
+        };
         for (Car c : db.cars()) {
             list.addView(carManagerRow(c, () -> {
                 if (holder[0] != null) holder[0].dismiss();
-            }));
+            }, refreshManager));
         }
         Button add = primaryButton("+ 添加车辆");
-        add.setOnClickListener(v -> showCarDialog(null));
+        add.setOnClickListener(v -> showCarDialog(null, refreshManager));
         LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(-1, dp(50));
         addLp.setMargins(0, dp(4), 0, 0);
         list.addView(add, addLp);
@@ -803,7 +819,7 @@ public class MainActivity extends Activity {
         holder[0].show();
     }
 
-    private View carManagerRow(Car c, Runnable afterSelect) {
+    private View carManagerRow(Car c, Runnable afterSelect, Runnable afterEdit) {
         LinearLayout card = card();
         LinearLayout top = row();
         TextView avatar = label(isElectric(c) ? "电" : (c.defaultFuel.isEmpty() ? "车" : c.defaultFuel), 13, true);
@@ -822,7 +838,7 @@ public class MainActivity extends Activity {
         copy.addView(meta);
         top.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
         Button edit = quietButton("编辑");
-        edit.setOnClickListener(v -> showCarDialog(c));
+        edit.setOnClickListener(v -> showCarDialog(c, afterEdit));
         top.addView(edit, new LinearLayout.LayoutParams(dp(72), dp(42)));
         card.addView(top);
         card.setOnClickListener(v -> {
@@ -837,6 +853,10 @@ public class MainActivity extends Activity {
     }
 
     private void showCarDialog(Car c) {
+        showCarDialog(c, null);
+    }
+
+    private void showCarDialog(Car c, Runnable afterSave) {
         LinearLayout form = dialogForm();
         form.addView(formHero(c == null ? "添加车辆" : "编辑车辆", "车辆资料会影响默认油品、统计和当前车辆切换。"));
         EditText name = input("例如 我的车", c == null ? "我的车" : c.name, false);
@@ -889,6 +909,7 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             refreshCars();
             renderCurrentTab();
+            if (afterSave != null) afterSave.run();
         }));
         dialog.show();
     }
@@ -1497,11 +1518,52 @@ public class MainActivity extends Activity {
         return v;
     }
 
-    private View chartCard(String title, ChartView chart) {
+    private View chartCard(String title, List<FuelPoint> points, int mode) {
         LinearLayout c = card();
         c.addView(label(title, 17, true));
+        c.addView(chartSummary(points, mode));
+        ChartView chart = new ChartView(this, points, mode);
         c.addView(chart, new LinearLayout.LayoutParams(-1, dp(220)));
         return c;
+    }
+
+    private View chartSummary(List<FuelPoint> points, int mode) {
+        String text = chartSummaryText(points, mode);
+        TextView v = label(text, 13, false);
+        v.setTextColor(muted);
+        v.setPadding(0, dp(6), 0, dp(8));
+        return v;
+    }
+
+    private String chartSummaryText(List<FuelPoint> points, int mode) {
+        int count = 0;
+        double latest = 0;
+        double max = 0;
+        double total = 0;
+        String latestLabel = "";
+        for (FuelPoint fp : points) {
+            double value = chartValue(fp, mode);
+            if (value <= 0) continue;
+            count++;
+            total += value;
+            max = Math.max(max, value);
+            latest = value;
+            latestLabel = fp.label == null ? "" : fp.label;
+        }
+        if (count == 0) {
+            if (mode == ChartView.MODE_CONSUMPTION) return "需要两次有效的加满/充满记录后，才会生成平均能耗趋势。";
+            if (mode == ChartView.MODE_PRICE) return "记录单价后会显示价格变化，当前还没有可绘制的数据。";
+            if (mode == ChartView.MODE_PIE) return "填写站点和金额后，会显示各站点费用占比。";
+            return "有费用记录后，会显示月度金额和变化。";
+        }
+        if (mode == ChartView.MODE_BAR || mode == ChartView.MODE_PIE) {
+            return "合计 ¥" + two.format(total) + " · 最高 ¥" + two.format(max) + " · 项目 " + count + " 个";
+        }
+        return "最近 " + latestLabel + "：" + two.format(latest) + " · 最高 " + two.format(max) + " · 样本 " + count + " 条";
+    }
+
+    private double chartValue(FuelPoint fp, int mode) {
+        return mode == ChartView.MODE_PRICE ? fp.secondary : fp.value;
     }
 
     private void clear() {
@@ -1991,15 +2053,49 @@ public class MainActivity extends Activity {
             int w = getWidth(), h = getHeight();
             p.setColor(Color.rgb(250, 248, 242));
             canvas.drawRoundRect(new RectF(0, dp(8), w, h), dp(8), dp(8), p);
-            if (points.isEmpty()) {
-                p.setColor(Color.rgb(117, 112, 101));
-                p.setTextSize(dp(14));
-                canvas.drawText("暂无足够数据", dp(18), h / 2f, p);
+            if (!hasDrawableData()) {
+                drawEmptyState(canvas, w, h);
                 return;
             }
             if (mode == MODE_PIE) drawPie(canvas, w, h);
             else if (mode == MODE_BAR) drawBar(canvas, w, h);
             else drawLine(canvas, w, h);
+        }
+
+        private boolean hasDrawableData() {
+            for (FuelPoint fp : points) {
+                double v = mode == MODE_PRICE ? fp.secondary : fp.value;
+                if (v > 0) return true;
+            }
+            return false;
+        }
+
+        private void drawEmptyState(Canvas c, int w, int h) {
+            String title;
+            String subtitle;
+            if (mode == MODE_CONSUMPTION) {
+                title = "还没有可计算的能耗";
+                subtitle = "连续两次加满/充满后自动生成趋势";
+            } else if (mode == MODE_PRICE) {
+                title = "还没有价格趋势";
+                subtitle = "保存单价后这里会显示变化";
+            } else if (mode == MODE_PIE) {
+                title = "还没有站点占比";
+                subtitle = "填写站点和金额后自动汇总";
+            } else {
+                title = "还没有月度费用";
+                subtitle = "新增记录后这里会显示柱状图";
+            }
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setColor(ink);
+            p.setTextSize(dp(15));
+            p.setFakeBoldText(true);
+            c.drawText(title, w / 2f, h / 2f - dp(8), p);
+            p.setFakeBoldText(false);
+            p.setColor(muted);
+            p.setTextSize(dp(12));
+            c.drawText(subtitle, w / 2f, h / 2f + dp(14), p);
+            p.setTextAlign(Paint.Align.LEFT);
         }
 
         private void drawLine(Canvas c, int w, int h) {
