@@ -1,6 +1,7 @@
 package com.codex.fuellog;
 
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -45,16 +46,36 @@ final class AdManager {
             return;
         }
         initialized = true;
-        UMConfigure.setLogEnabled(false);
-        UMConfigure.preInit(activity.getApplicationContext(), AdConfig.UMENG_APP_KEY, AdConfig.UMENG_CHANNEL);
-        UMUnionSdk.init(activity.getApplicationContext());
-        new Thread(() -> UMConfigure.init(
-                activity.getApplicationContext(),
+        Context app = activity.getApplicationContext();
+        UMConfigure.setLogEnabled(true);
+        UMConfigure.preInit(app, AdConfig.UMENG_APP_KEY, AdConfig.UMENG_CHANNEL);
+        UMConfigure.submitPolicyGrantResult(app, true);
+        UMConfigure.init(
+                app,
                 AdConfig.UMENG_APP_KEY,
                 AdConfig.UMENG_CHANNEL,
                 UMConfigure.DEVICE_TYPE_PHONE,
                 null
-        )).start();
+        );
+        UMUnionSdk.setResourcePackage(app.getPackageName());
+        UMUnionSdk.setAdCallback(new UMUnionApi.AdCallback() {
+            @Override
+            public void onFailure(UMUnionApi.AdType type, String message) {
+                Log.d(TAG, "ad callback failed " + type + ": " + message);
+            }
+
+            @Override
+            public void onShow(UMUnionApi.AdType type) {
+                Log.d(TAG, "ad callback show " + type);
+            }
+
+            @Override
+            public void onClicked(UMUnionApi.AdType type) {
+                Log.d(TAG, "ad callback clicked " + type);
+            }
+        });
+        UMUnionSdk.init(app);
+        Log.d(TAG, "Umeng initialized, initStatus=" + UMConfigure.getInitStatus());
     }
 
     static void showSplash(Activity activity) {
