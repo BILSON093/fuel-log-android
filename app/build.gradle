@@ -14,3 +14,7 @@ android {
         versionName "1.0.1"
     }
 }
+
+dependencies {
+    implementation fileTree(dir: "libs", include: ["*.aar"])
+}

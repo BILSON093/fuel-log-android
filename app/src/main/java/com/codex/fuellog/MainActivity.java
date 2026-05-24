@@ -87,10 +87,13 @@ public class MainActivity extends Activity {
         StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder().build());
         db = new Db(this);
         db.ensureSeed();
+        AdManager.init(this);
         requestNotificationPermission();
         buildShell();
         refreshCars();
         showDashboard();
+        AdManager.showSplash(this);
+        AdManager.requestFloating(this);
     }
 
     private void requestNotificationPermission() {
@@ -301,6 +304,12 @@ public class MainActivity extends Activity {
         quick.addView(upkeep, new LinearLayout.LayoutParams(0, dp(50), 1));
         quick.addView(expense, new LinearLayout.LayoutParams(0, dp(50), 1));
         box.addView(quick);
+        View feedAd = AdManager.createFeedAd(this);
+        if (feedAd != null) {
+            LinearLayout.LayoutParams adLp = new LinearLayout.LayoutParams(-1, -2);
+            adLp.setMargins(0, dp(12), 0, dp(4));
+            box.addView(feedAd, adLp);
+        }
         box.addView(sectionTitle("本车概览"));
         LinearLayout grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
