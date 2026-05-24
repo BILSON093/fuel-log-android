@@ -50,13 +50,6 @@ final class AdManager {
         UMConfigure.setLogEnabled(true);
         UMConfigure.preInit(app, AdConfig.UMENG_APP_KEY, AdConfig.UMENG_CHANNEL);
         UMConfigure.submitPolicyGrantResult(app, true);
-        UMConfigure.init(
-                app,
-                AdConfig.UMENG_APP_KEY,
-                AdConfig.UMENG_CHANNEL,
-                UMConfigure.DEVICE_TYPE_PHONE,
-                null
-        );
         UMUnionSdk.setResourcePackage(app.getPackageName());
         UMUnionSdk.setAdCallback(new UMUnionApi.AdCallback() {
             @Override
@@ -75,6 +68,13 @@ final class AdManager {
             }
         });
         UMUnionSdk.init(app);
+        new Thread(() -> UMConfigure.init(
+                app,
+                AdConfig.UMENG_APP_KEY,
+                AdConfig.UMENG_CHANNEL,
+                UMConfigure.DEVICE_TYPE_PHONE,
+                null
+        ), "umeng-init").start();
         Log.d(TAG, "Umeng initialized, initStatus=" + UMConfigure.getInitStatus());
     }
 
@@ -92,54 +92,61 @@ final class AdManager {
             removeFromParent(overlay);
         };
         MAIN.postDelayed(loadTimeout, 3500);
-        UMAdConfig config = new UMAdConfig.Builder().setSlotId(AdConfig.SPLASH_SLOT_ID).build();
-        UMUnionSdk.loadSplashAd(config, new UMUnionApi.AdLoadListener<UMSplashAD>() {
-            @Override
-            public void onSuccess(UMUnionApi.AdType type, UMSplashAD display) {
-                MAIN.removeCallbacks(loadTimeout);
-                if (activity.isFinishing() || !display.isValid()) {
+        try {
+            UMAdConfig config = new UMAdConfig.Builder().setSlotId(AdConfig.SPLASH_SLOT_ID).build();
+            UMUnionSdk.loadSplashAd(config, new UMUnionApi.AdLoadListener<UMSplashAD>() {
+                @Override
+                public void onSuccess(UMUnionApi.AdType type, UMSplashAD display) {
+                    MAIN.removeCallbacks(loadTimeout);
+                    if (activity.isFinishing() || !display.isValid()) {
+                        Log.d(TAG, "splash load success but display is invalid");
+                        removeFromParent(overlay);
+                        return;
+                    }
+                    if (overlay.getParent() == null) {
+                        activity.addContentView(overlay, new ViewGroup.LayoutParams(-1, -1));
+                    }
+                    MAIN.postDelayed(close, 5000);
+                    display.setAdEventListener(new UMUnionApi.SplashAdListener() {
+                        @Override
+                        public void onDismissed() {
+                            MAIN.removeCallbacks(close);
+                            removeFromParent(overlay);
+                        }
+
+                        @Override
+                        public void onExposed() {
+                            Log.d(TAG, "splash exposed");
+                        }
+
+                        @Override
+                        public void onClicked(View view) {
+                            Log.d(TAG, "splash clicked");
+                        }
+
+                        @Override
+                        public void onError(int code, String message) {
+                            Log.d(TAG, "splash error " + code + ": " + message);
+                            MAIN.removeCallbacks(close);
+                            removeFromParent(overlay);
+                        }
+                    });
+                    display.disableShake();
+                    display.show(overlay);
+                }
+
+                @Override
+                public void onFailure(UMUnionApi.AdType type, String message) {
+                    Log.d(TAG, "splash load failed " + type + ": " + message);
+                    MAIN.removeCallbacks(loadTimeout);
                     removeFromParent(overlay);
-                    return;
                 }
-                if (overlay.getParent() == null) {
-                    activity.addContentView(overlay, new ViewGroup.LayoutParams(-1, -1));
-                }
-                MAIN.postDelayed(close, 5000);
-                display.setAdEventListener(new UMUnionApi.SplashAdListener() {
-                    @Override
-                    public void onDismissed() {
-                        MAIN.removeCallbacks(close);
-                        removeFromParent(overlay);
-                    }
-
-                    @Override
-                    public void onExposed() {
-                        Log.d(TAG, "splash exposed");
-                    }
-
-                    @Override
-                    public void onClicked(View view) {
-                        Log.d(TAG, "splash clicked");
-                    }
-
-                    @Override
-                    public void onError(int code, String message) {
-                        Log.d(TAG, "splash error " + code + ": " + message);
-                        MAIN.removeCallbacks(close);
-                        removeFromParent(overlay);
-                    }
-                });
-                display.disableShake();
-                display.show(overlay);
-            }
-
-            @Override
-            public void onFailure(UMUnionApi.AdType type, String message) {
-                Log.d(TAG, "splash load failed: " + message);
-                MAIN.removeCallbacks(loadTimeout);
-                removeFromParent(overlay);
-            }
-        }, 3000);
+            }, 3000);
+        } catch (Throwable t) {
+            Log.e(TAG, "splash request crashed", t);
+            MAIN.removeCallbacks(loadTimeout);
+            removeFromParent(overlay);
+        }
     }
 
     static View createFeedAd(Activity activity) {
@@ -151,23 +158,30 @@ final class AdManager {
         layout.setVisibility(View.GONE);
         layout.setPadding(dp(activity, 14), dp(activity, 12), dp(activity, 14), dp(activity, 12));
         layout.setBackgroundColor(Color.WHITE);
-        UMAdConfig config = new UMAdConfig.Builder().setSlotId(AdConfig.FEED_SLOT_ID).build();
-        UMUnionSdk.loadFeedAd(config, new UMUnionApi.AdLoadListener<UMNativeAD>() {
-            @Override
-            public void onSuccess(UMUnionApi.AdType type, UMNativeAD display) {
-                if (activity.isFinishing() || !display.isValid()) return;
-                display.setAdEventListener(simpleEventListener("feed"));
-                new Thread(() -> {
-                    Bitmap bitmap = bitmap(display.getImageUrl());
-                    MAIN.post(() -> bindFeed(activity, layout, display, bitmap));
-                }).start();
-            }
+        try {
+            UMAdConfig config = new UMAdConfig.Builder().setSlotId(AdConfig.FEED_SLOT_ID).build();
+            UMUnionSdk.loadFeedAd(config, new UMUnionApi.AdLoadListener<UMNativeAD>() {
+                @Override
+                public void onSuccess(UMUnionApi.AdType type, UMNativeAD display) {
+                    if (activity.isFinishing() || !display.isValid()) {
+                        Log.d(TAG, "feed load success but display is invalid");
+                        return;
+                    }
+                    display.setAdEventListener(simpleEventListener("feed"));
+                    new Thread(() -> {
+                        Bitmap bitmap = bitmap(display.getImageUrl());
+                        MAIN.post(() -> bindFeed(activity, layout, display, bitmap));
+                    }).start();
+                }
 
-            @Override
-            public void onFailure(UMUnionApi.AdType type, String message) {
-                Log.d(TAG, "feed load failed: " + message);
-            }
-        });
+                @Override
+                public void onFailure(UMUnionApi.AdType type, String message) {
+                    Log.d(TAG, "feed load failed " + type + ": " + message);
+                }
+            });
+        } catch (Throwable t) {
+            Log.e(TAG, "feed request crashed", t);
+        }
         return layout;
     }
 
@@ -179,21 +193,28 @@ final class AdManager {
         floatingRequested = true;
         MAIN.postDelayed(() -> {
             if (activity.isFinishing()) return;
-            UMAdConfig config = new UMAdConfig.Builder().setSlotId(AdConfig.FLOATING_SLOT_ID).build();
-            UMUnionSdk.getApi().loadFloatingBannerAd(activity, config, new UMUnionApi.AdLoadListener<UMUnionApi.AdDisplay>() {
-                @Override
-                public void onSuccess(UMUnionApi.AdType type, UMUnionApi.AdDisplay display) {
-                    if (activity.isFinishing() || !display.isValid()) return;
-                    display.setAdEventListener(simpleEventListener("floating"));
-                    display.setAdCloseListener(adType -> Log.d(TAG, "floating closed"));
-                    display.show(activity);
-                }
+            try {
+                UMAdConfig config = new UMAdConfig.Builder().setSlotId(AdConfig.FLOATING_SLOT_ID).build();
+                UMUnionSdk.getApi().loadFloatingBannerAd(activity, config, new UMUnionApi.AdLoadListener<UMUnionApi.AdDisplay>() {
+                    @Override
+                    public void onSuccess(UMUnionApi.AdType type, UMUnionApi.AdDisplay display) {
+                        if (activity.isFinishing() || !display.isValid()) {
+                            Log.d(TAG, "floating load success but display is invalid");
+                            return;
+                        }
+                        display.setAdEventListener(simpleEventListener("floating"));
+                        display.setAdCloseListener(adType -> Log.d(TAG, "floating closed"));
+                        display.show(activity);
+                    }
 
-                @Override
-                public void onFailure(UMUnionApi.AdType type, String message) {
-                    Log.d(TAG, "floating load failed: " + message);
-                }
-            });
+                    @Override
+                    public void onFailure(UMUnionApi.AdType type, String message) {
+                        Log.d(TAG, "floating load failed " + type + ": " + message);
+                    }
+                });
+            } catch (Throwable t) {
+                Log.e(TAG, "floating request crashed", t);
+            }
         }, 1200);
     }
 
