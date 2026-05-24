@@ -16,19 +16,7 @@
 - 本地提醒
 - JSON 备份导出
 - CSV 加油记录导出
-- 友盟 U-AppWin 广告接入：开屏广告、首页信息流广告、浮窗广告
 - 本地 SQLite 存储，无需登录和网络
-
-## 广告配置
-
-友盟 SDK 的 AAR 已放在 `app/libs/`，对应文档中的手动集成方式。上线前必须在 `app/src/main/java/com/codex/fuellog/AdConfig.java` 填入后台真实值：
-
-- `UMENG_APP_KEY`
-- `SPLASH_SLOT_ID`
-- `FEED_SLOT_ID`
-- `FLOATING_SLOT_ID`
-
-没有填写这些值时，广告模块不会发起请求，App 内也不会显示广告。
 
 ## 构建
 
