@@ -1,60 +1,54 @@
 # 车耗记
 
-一个离线优先的 Android 油耗、电耗、充电、加油、保养和费用记录 App。
+车耗记是一个离线优先的 Android 车辆能耗与费用记录应用，支持油车和电车分别记录、统计和可视化。项目目前以单一 `main` 分支维护。
 
-## 已实现
+## 功能
 
-- 多车辆管理
-- 油车/电车独立记录与统计
-- 加油记录增删改查
-- 充电记录增删改查
-- 加满/未加满/漏记区间油耗计算
-- 充满/未充满/漏记区间电耗计算
-- 首页平均油耗/电耗、最近油耗/电耗、总里程、本月油费/电费、真实每公里成本
-- 保养记录和其他费用记录
-- 油耗/电耗趋势、油价/电价趋势、月度油费/电费、月度总成本、站点费用占比图表
+- 多车辆管理，支持油车/电车类型区分
+- 加油、充电、保养、其他费用记录的新增、编辑和删除
+- 油耗、电耗、单价、月度费用、站点费用占比图表
+- 图表数据摘要与最近明细
+- 首页概览：平均能耗、最近能耗、总里程、本月能源费用、真实每公里成本
 - 本地提醒
-- JSON 备份导出
-- CSV 加油记录导出
-- 友盟 U-AppWin 广告接入：开屏广告、首页信息流广告、浮窗广告
-- 本地 SQLite 存储，无需登录和网络
+- JSON 备份导出与导入
+- CSV 表格导出
+- 本地 SQLite 存储，无需登录
 
 ## 广告配置
 
-友盟 SDK 的 AAR 已放在 `app/libs/`，对应文档中的手动集成方式。上线前必须在 `app/src/main/java/com/codex/fuellog/AdConfig.java` 填入后台真实值：
+项目保留了友盟 U-AppWin 广告接入代码和 SDK 依赖，但不会在仓库中提交真实 AppKey、广告位 ID 或渠道值。
 
-- `UMENG_APP_KEY`
-- `SPLASH_SLOT_ID`
-- `FEED_SLOT_ID`
-- `FLOATING_SLOT_ID`
+默认配置位于：
 
-没有填写这些值时，广告模块不会发起请求，App 内也不会显示广告。
+```text
+app/src/main/java/com/codex/fuellog/AdConfig.java
+```
+
+当前值为空，因此广告模块不会发起请求。需要测试广告时，在本地临时填入自己的配置后再构建，不要把真实配置提交到仓库。
+
+## 目录
+
+```text
+app/                  Android 应用源码与资源
+app/libs/             第三方 AAR 依赖
+dist/                 本地构建输出
+build-apk.sh          构建调试签名 APK
+build-release.sh      构建正式签名 APK
+build-release-aab.sh  构建 AAB
+```
 
 ## 构建
 
-当前 APK 已输出到：
+环境要求：
 
-```text
-dist/车耗记.apk
-```
+- Android SDK 35 build-tools
+- JDK 17
 
-重新构建：
+构建 APK：
 
 ```bash
 ./build-apk.sh
 ```
-
-需要本机存在 Android SDK 35 build-tools 和 JDK 17。
-
-## 上架准备
-
-上架资料在 `release/` 目录：
-
-- `privacy-policy.html`：隐私政策
-- `store-listing.md`：应用市场文案
-- `compliance.md`：权限和数据合规说明
-- `release-checklist.md`：审核前检查清单
-- `assets/`：图标和宣传图
 
 构建正式签名 APK：
 
@@ -62,14 +56,19 @@ dist/车耗记.apk
 ./build-release.sh
 ```
 
-输出：
+输出文件：
 
 ```text
+dist/车耗记.apk
 dist/车耗记-release.apk
 ```
 
-构建 Google Play AAB：
+## 数据说明
 
-```bash
-./build-release-aab.sh
-```
+应用数据默认保存在本地 SQLite 数据库中。JSON 备份可用于迁移或恢复，CSV 导出用于查看加油/充电记录表格。
+
+## 注意
+
+- 仓库不再包含应用商店上架资料、隐私政策草稿、合规说明或宣传素材。
+- `release/keystore/`、SDK 压缩包和本地系统文件已加入 `.gitignore`，不要提交。
+- 若重新启用广告，请确认后台广告位配置完整，并使用本地配置方式管理真实密钥。

@@ -16,12 +16,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <meta-data
-            android:name="UMENG_APPKEY"
-            android:value="6a11e0269a7f376488e55f57" />
-        <meta-data
-            android:name="UMENG_CHANNEL"
-            android:value="official" />
         <activity
             android:name=".MainActivity"
             android:exported="true">

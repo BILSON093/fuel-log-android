@@ -1,11 +1,11 @@
 package com.codex.fuellog;
 
 final class AdConfig {
-    static final String UMENG_APP_KEY = "6a11e0269a7f376488e55f57";
-    static final String UMENG_CHANNEL = "official";
-    static final String SPLASH_SLOT_ID = "100010252";
-    static final String FEED_SLOT_ID = "100010253";
-    static final String FLOATING_SLOT_ID = "100010254";
+    static final String UMENG_APP_KEY = "";
+    static final String UMENG_CHANNEL = "";
+    static final String SPLASH_SLOT_ID = "";
+    static final String FEED_SLOT_ID = "";
+    static final String FLOATING_SLOT_ID = "";
 
     private AdConfig() {
     }
