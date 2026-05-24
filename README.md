@@ -59,11 +59,6 @@ dist/车耗记-release.apk
 
 应用数据默认保存在本地 SQLite 数据库中。JSON 备份可用于迁移或恢复，CSV 导出用于查看加油/充电记录表格。
 
-## 注意
-
-- 仓库不再包含应用商店上架资料、隐私政策草稿、合规说明或宣传素材。
-- `release/keystore/`、SDK 压缩包和本地系统文件已加入 `.gitignore`，不要提交。
-
 ## License
 
 Copyright (c) 2026 BILSON093.
