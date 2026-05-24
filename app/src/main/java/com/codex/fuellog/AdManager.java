@@ -34,6 +34,9 @@ final class AdManager {
     private static boolean splashShown;
     private static boolean floatingRequested;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static final long SPLASH_SHOW_WINDOW_MS = 1400;
+    private static final long SPLASH_LOAD_TIMEOUT_MS = 2500;
+    private static final long SPLASH_CLOSE_TIMEOUT_MS = 5000;
 
     private AdManager() {
     }
@@ -63,6 +66,7 @@ final class AdManager {
             return;
         }
         splashShown = true;
+        final long requestStarted = System.currentTimeMillis();
         final FrameLayout overlay = new FrameLayout(activity);
         overlay.setBackgroundColor(Color.TRANSPARENT);
         final Runnable close = () -> removeFromParent(overlay);
@@ -70,12 +74,18 @@ final class AdManager {
             Log.d(TAG, "splash load timeout");
             removeFromParent(overlay);
         };
-        MAIN.postDelayed(loadTimeout, 3500);
+        MAIN.postDelayed(loadTimeout, SPLASH_LOAD_TIMEOUT_MS);
         UMAdConfig config = new UMAdConfig.Builder().setSlotId(AdConfig.SPLASH_SLOT_ID).build();
         UMUnionSdk.loadSplashAd(config, new UMUnionApi.AdLoadListener<UMSplashAD>() {
             @Override
             public void onSuccess(UMUnionApi.AdType type, UMSplashAD display) {
                 MAIN.removeCallbacks(loadTimeout);
+                long elapsed = System.currentTimeMillis() - requestStarted;
+                if (elapsed > SPLASH_SHOW_WINDOW_MS) {
+                    Log.d(TAG, "splash arrived late after " + elapsed + "ms, skipped");
+                    removeFromParent(overlay);
+                    return;
+                }
                 if (activity.isFinishing() || !display.isValid()) {
                     removeFromParent(overlay);
                     return;
@@ -83,7 +93,7 @@ final class AdManager {
                 if (overlay.getParent() == null) {
                     activity.addContentView(overlay, new ViewGroup.LayoutParams(-1, -1));
                 }
-                MAIN.postDelayed(close, 5000);
+                MAIN.postDelayed(close, SPLASH_CLOSE_TIMEOUT_MS);
                 display.setAdEventListener(new UMUnionApi.SplashAdListener() {
                     @Override
                     public void onDismissed() {
