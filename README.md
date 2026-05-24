@@ -18,11 +18,20 @@
 - CSV 表格导出
 - 本地 SQLite 存储，无需登录
 
+## 截图
+
+截图文件建议放在 `docs/screenshots/` 目录：
+
+| 首页 | 记录页 | 图表页 | 费用页 | 设置页 |
+| --- | --- | --- | --- | --- |
+| ![首页](docs/screenshots/home.png) | ![记录页](docs/screenshots/records.png) | ![图表页](docs/screenshots/charts.png) | ![费用页](docs/screenshots/costs.png) | ![设置页](docs/screenshots/settings.png) |
+
 ## 目录
 
 ```text
 app/                  Android 应用源码与资源
 app/libs/             第三方 AAR 依赖
+docs/screenshots/     README 截图
 dist/                 本地构建输出
 build-apk.sh          构建调试签名 APK
 build-release.sh      构建正式签名 APK
