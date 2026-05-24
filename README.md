@@ -18,13 +18,19 @@
 - CSV 表格导出
 - 本地 SQLite 存储，无需登录
 
-## 截图
+## 软件运行
 
-截图文件建议放在 `docs/screenshots/` 目录：
+| 首页 | 记录页 |
+| --- | --- |
+| ![首页](docs/screenshots/home.png) | ![记录页](docs/screenshots/records.png) |
 
-| 首页 | 记录页 | 图表页 | 费用页 | 设置页 |
-| --- | --- | --- | --- | --- |
-| ![首页](docs/screenshots/home.png) | ![记录页](docs/screenshots/records.png) | ![图表页](docs/screenshots/charts.png) | ![费用页](docs/screenshots/costs.png) | ![设置页](docs/screenshots/settings.png) |
+| 图表页 | 费用页 |
+| --- | --- |
+| ![图表页](docs/screenshots/charts.png) | ![费用页](docs/screenshots/costs.png) |
+
+| 设置页 |
+| --- |
+| ![设置页](docs/screenshots/settings.png) |
 
 ## 目录
 
