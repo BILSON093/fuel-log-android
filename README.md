@@ -59,3 +59,7 @@ dist/车耗记-release.apk
 
 - 仓库不再包含应用商店上架资料、隐私政策草稿、合规说明或宣传素材。
 - `release/keystore/`、SDK 压缩包和本地系统文件已加入 `.gitignore`，不要提交。
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
