@@ -803,7 +803,7 @@ public class MainActivity extends Activity {
         final AlertDialog[] holder = new AlertDialog[1];
         Runnable refreshManager = () -> {
             if (holder[0] != null) holder[0].dismiss();
-            showCarManager();
+            carCard.post(this::showCarManager);
         };
         for (Car c : db.cars()) {
             list.addView(carManagerRow(c, () -> {
@@ -857,17 +857,22 @@ public class MainActivity extends Activity {
     }
 
     private void showCarDialog(Car c, Runnable afterSave) {
+        Car editing = c == null ? null : db.car(c.id);
+        if (c != null && editing == null) {
+            toast("车辆信息已不存在");
+            return;
+        }
         LinearLayout form = dialogForm();
-        form.addView(formHero(c == null ? "添加车辆" : "编辑车辆", "车辆资料会影响默认油品、统计和当前车辆切换。"));
-        EditText name = input("例如 我的车", c == null ? "我的车" : c.name, false);
-        EditText brand = input("品牌 / 型号", c == null ? "" : c.brand, false);
-        EditText plate = input("车牌号", c == null ? "" : c.plate, false);
+        form.addView(formHero(editing == null ? "添加车辆" : "编辑车辆", "车辆资料会影响默认油品、统计和当前车辆切换。"));
+        EditText name = input("例如 我的车", editing == null ? "我的车" : editing.name, false);
+        EditText brand = input("品牌 / 型号", editing == null ? "" : editing.brand, false);
+        EditText plate = input("车牌号", editing == null ? "" : editing.plate, false);
         plate.setFilters(new InputFilter[]{new InputFilter.AllCaps(), new InputFilter.LengthFilter(8)});
         plate.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-        EditText fuelType = input("汽油 / 柴油 / 混动 / 电车", c == null ? "汽油" : c.fuelType, false);
-        EditText defaultFuel = input("92 / 95 / 98 / 快充", c == null ? "92" : c.defaultFuel, false);
-        EditText initial = input("例如 0", c == null ? "0" : one.format(c.initialOdometer), true);
-        EditText tank = input("例如 50", c == null ? "50" : one.format(c.tankLiters), true);
+        EditText fuelType = input("汽油 / 柴油 / 混动 / 电车", editing == null ? "汽油" : editing.fuelType, false);
+        EditText defaultFuel = input("92 / 95 / 98 / 快充", editing == null ? "92" : editing.defaultFuel, false);
+        EditText initial = input("例如 0", editing == null ? "0" : one.format(editing.initialOdometer), true);
+        EditText tank = input("例如 50", editing == null ? "50" : one.format(editing.tankLiters), true);
         defaultFuel.setOnClickListener(v -> {
             boolean ev = fuelType.getText().toString().contains("电");
             chooseValue(defaultFuel, ev ? new String[]{"快充", "慢充", "家充", "公共充电"} : new String[]{"92", "95", "98", "柴油"});
@@ -882,7 +887,7 @@ public class MainActivity extends Activity {
         fuel.addView(twoFields(field("初始里程 km", initial), field("油箱/电池容量", tank)));
         form.addView(fuel);
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(c == null ? "添加车辆" : "编辑车辆")
+                .setTitle(editing == null ? "添加车辆" : "编辑车辆")
                 .setView(scrollForm(form))
                 .setPositiveButton("保存", null)
                 .setNegativeButton("取消", null)
@@ -892,7 +897,7 @@ public class MainActivity extends Activity {
                 toast("车辆名称不能为空");
                 return;
             }
-            if (c == null) {
+            if (editing == null) {
                 long id = db.insertCar(text(name, ""), text(brand, ""), text(plate, ""), text(fuelType, "汽油"), text(defaultFuel, "92"), num(initial), num(tank), false);
                 saveDefaultCar(id);
             } else {
@@ -904,7 +909,7 @@ public class MainActivity extends Activity {
                 cv.put("default_fuel", text(defaultFuel, ""));
                 cv.put("initial_odometer", num(initial));
                 cv.put("tank_liters", num(tank));
-                db.update("cars", c.id, cv);
+                db.update("cars", editing.id, cv);
             }
             dialog.dismiss();
             refreshCars();
@@ -1524,6 +1529,8 @@ public class MainActivity extends Activity {
         c.addView(chartSummary(points, mode));
         ChartView chart = new ChartView(this, points, mode);
         c.addView(chart, new LinearLayout.LayoutParams(-1, dp(220)));
+        c.addView(chartStats(points, mode));
+        c.addView(chartDetails(points, mode));
         return c;
     }
 
@@ -1564,6 +1571,129 @@ public class MainActivity extends Activity {
 
     private double chartValue(FuelPoint fp, int mode) {
         return mode == ChartView.MODE_PRICE ? fp.secondary : fp.value;
+    }
+
+    private View chartStats(List<FuelPoint> points, int mode) {
+        ChartNumbers n = chartNumbers(points, mode);
+        LinearLayout strip = new LinearLayout(this);
+        strip.setOrientation(LinearLayout.HORIZONTAL);
+        strip.setPadding(0, dp(10), 0, dp(4));
+        if (n.count == 0) {
+            TextView v = label("暂无可统计数据", 13, false);
+            v.setTextColor(muted);
+            strip.addView(v);
+            return strip;
+        }
+        if (mode == ChartView.MODE_BAR || mode == ChartView.MODE_PIE) {
+            strip.addView(chartStatBox("合计", money(n.total), 1));
+            strip.addView(chartStatBox("最高", money(n.max), 1));
+            strip.addView(chartStatBox("项目", n.count + " 个", 1));
+        } else {
+            strip.addView(chartStatBox("最近", chartValueText(n.latest, mode), 1));
+            strip.addView(chartStatBox("平均", chartValueText(n.avg, mode), 1));
+            strip.addView(chartStatBox("最高", chartValueText(n.max, mode), 1));
+        }
+        return strip;
+    }
+
+    private View chartStatBox(String title, String value, float weight) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(8), dp(10), dp(8));
+        box.setBackground(round(Color.rgb(244, 248, 246), dp(10), Color.rgb(222, 232, 227)));
+        TextView t = label(title, 12, false);
+        t.setTextColor(muted);
+        TextView v = label(value, 15, true);
+        v.setSingleLine(false);
+        box.addView(t);
+        box.addView(v);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, weight);
+        lp.setMargins(dp(3), 0, dp(3), 0);
+        box.setLayoutParams(lp);
+        return box;
+    }
+
+    private View chartDetails(List<FuelPoint> points, int mode) {
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(0, dp(2), 0, 0);
+        List<FuelPoint> usable = chartUsable(points, mode);
+        if (usable.isEmpty()) return list;
+        TextView title = label(mode == ChartView.MODE_PIE ? "费用占比明细" : "最近数据", 13, true);
+        title.setTextColor(muted);
+        title.setPadding(0, dp(6), 0, dp(2));
+        list.addView(title);
+        double total = 0;
+        for (FuelPoint fp : usable) total += chartValue(fp, mode);
+        int start = mode == ChartView.MODE_PIE ? 0 : Math.max(0, usable.size() - 4);
+        int shown = 0;
+        for (int i = start; i < usable.size() && shown < 4; i++, shown++) {
+            FuelPoint fp = usable.get(i);
+            double value = chartValue(fp, mode);
+            list.addView(chartDetailRow(fp.label, value, total, mode));
+        }
+        return list;
+    }
+
+    private View chartDetailRow(String name, double value, double total, int mode) {
+        LinearLayout line = new LinearLayout(this);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+        line.setPadding(0, dp(4), 0, dp(4));
+        TextView left = label(name == null || name.isEmpty() ? "未命名" : name, 13, false);
+        left.setTextColor(ink);
+        TextView right = label(chartValueText(value, mode) + chartPercent(value, total, mode), 13, true);
+        right.setGravity(Gravity.RIGHT);
+        line.addView(left, new LinearLayout.LayoutParams(0, -2, 1));
+        line.addView(right, new LinearLayout.LayoutParams(dp(132), -2));
+        return line;
+    }
+
+    private List<FuelPoint> chartUsable(List<FuelPoint> points, int mode) {
+        List<FuelPoint> usable = new ArrayList<>();
+        for (FuelPoint fp : points) {
+            if (chartValue(fp, mode) > 0) usable.add(fp);
+        }
+        if (mode == ChartView.MODE_PIE) {
+            for (int i = 0; i < usable.size(); i++) {
+                for (int j = i + 1; j < usable.size(); j++) {
+                    if (chartValue(usable.get(j), mode) > chartValue(usable.get(i), mode)) {
+                        FuelPoint tmp = usable.get(i);
+                        usable.set(i, usable.get(j));
+                        usable.set(j, tmp);
+                    }
+                }
+            }
+        }
+        return usable;
+    }
+
+    private ChartNumbers chartNumbers(List<FuelPoint> points, int mode) {
+        ChartNumbers n = new ChartNumbers();
+        for (FuelPoint fp : points) {
+            double value = chartValue(fp, mode);
+            if (value <= 0) continue;
+            n.count++;
+            n.total += value;
+            n.max = Math.max(n.max, value);
+            n.latest = value;
+        }
+        if (n.count > 0) n.avg = n.total / n.count;
+        return n;
+    }
+
+    private String chartValueText(double value, int mode) {
+        if (mode == ChartView.MODE_BAR || mode == ChartView.MODE_PIE) return money(value);
+        String unit = mode == ChartView.MODE_PRICE ? priceUnit() : consumptionUnit();
+        return two.format(value) + " " + unit;
+    }
+
+    private String chartPercent(double value, double total, int mode) {
+        if (mode != ChartView.MODE_PIE || total <= 0) return "";
+        return " · " + one.format(value / total * 100) + "%";
+    }
+
+    private String money(double value) {
+        return "¥" + two.format(value);
     }
 
     private void clear() {
@@ -1629,6 +1759,11 @@ public class MainActivity extends Activity {
         double secondary;
     }
 
+    static class ChartNumbers {
+        int count;
+        double latest, avg, max, total;
+    }
+
     public static class Db extends SQLiteOpenHelper {
         Db(Context context) {
             super(context, "fuel_log.db", null, 2);
@@ -1690,15 +1825,17 @@ public class MainActivity extends Activity {
             List<Car> list = new ArrayList<>();
             Cursor c = getReadableDatabase().rawQuery("SELECT * FROM cars ORDER BY id", null);
             while (c.moveToNext()) {
-                Car car = new Car();
-                car.id = c.getLong(c.getColumnIndexOrThrow("id"));
-                car.name = s(c, "name"); car.brand = s(c, "brand"); car.plate = s(c, "plate");
-                car.fuelType = s(c, "fuel_type"); car.defaultFuel = s(c, "default_fuel");
-                car.initialOdometer = d(c, "initial_odometer"); car.tankLiters = d(c, "tank_liters");
-                list.add(car);
+                list.add(car(c));
             }
             c.close();
             return list;
+        }
+
+        Car car(long id) {
+            Cursor c = getReadableDatabase().rawQuery("SELECT * FROM cars WHERE id=?", new String[]{String.valueOf(id)});
+            Car car = c.moveToFirst() ? car(c) : null;
+            c.close();
+            return car;
         }
 
         Fuel lastFuel(String table, long carId, long excludeId) {
@@ -1982,6 +2119,15 @@ public class MainActivity extends Activity {
             f.date = s(c, "date"); f.odometer = d(c, "odometer"); f.liters = d(c, "liters"); f.amount = d(c, "amount"); f.price = d(c, "price");
             f.station = s(c, "station"); f.fuelType = s(c, "fuel_type"); f.full = i(c, "is_full") == 1; f.missed = i(c, "is_missed") == 1; f.note = s(c, "note");
             return f;
+        }
+
+        private Car car(Cursor c) {
+            Car car = new Car();
+            car.id = c.getLong(c.getColumnIndexOrThrow("id"));
+            car.name = s(c, "name"); car.brand = s(c, "brand"); car.plate = s(c, "plate");
+            car.fuelType = s(c, "fuel_type"); car.defaultFuel = s(c, "default_fuel");
+            car.initialOdometer = d(c, "initial_odometer"); car.tankLiters = d(c, "tank_liters");
+            return car;
         }
 
         private Entry entry(Cursor c) {
